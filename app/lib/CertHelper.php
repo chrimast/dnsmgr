@@ -174,6 +174,44 @@ location / {
                 ],
             ]
         ],
+        'litessl' => [
+            'name' => 'LiteSSL',
+            'class' => 1,
+            'icon' => 'litessl.ico',
+            'wildcard' => true,
+            'max_domains' => 100,
+            'cname' => true,
+            'note' => '<a href="https://freessl.cn/automation/eab-manager" target="_blank" rel="noreferrer">LiteSSL密钥获取</a>',
+            'inputs' => [
+                'email' => [
+                    'name' => '邮箱地址',
+                    'type' => 'input',
+                    'placeholder' => 'EAB申请邮箱',
+                    'required' => true,
+                ],
+                'kid' => [
+                    'name' => 'EAB KID',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'key' => [
+                    'name' => 'EAB HMAC Key',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ]
+        ],
         'tencent' => [
             'name' => '腾讯云免费SSL',
             'class' => 2,
@@ -219,7 +257,7 @@ location / {
             'wildcard' => false,
             'max_domains' => 1,
             'cname' => false,
-            'note' => '每个自然年有20张免费证书额度，证书到期或吊销不释放额度。需要先进入阿里云控制台-<a href="https://yundun.console.aliyun.com/?p=cas#/certExtend/free/cn-hangzhou" target="_blank" rel="noreferrer">数字证书管理服务</a>，购买个人测试证书资源包。',
+            'note' => '每个自然年有20张免费证书额度，证书到期或吊销不释放额度。需要先进入阿里云控制台-<a href="https://yundun.console.aliyun.com/?p=cas#/instance/test/cn-hangzhou" target="_blank" rel="noreferrer">数字证书管理服务</a>，购买测试证书，并在联系人管理添加联系人。',
             'inputs' => [
                 'AccessKeyId' => [
                     'name' => 'AccessKeyId',
@@ -231,24 +269,6 @@ location / {
                     'name' => 'AccessKeySecret',
                     'type' => 'input',
                     'placeholder' => '',
-                    'required' => true,
-                ],
-                'username' => [
-                    'name' => '姓名',
-                    'type' => 'input',
-                    'placeholder' => '申请联系人的姓名',
-                    'required' => true,
-                ],
-                'phone' => [
-                    'name' => '手机号码',
-                    'type' => 'input',
-                    'placeholder' => '申请联系人的手机号码',
-                    'required' => true,
-                ],
-                'email' => [
-                    'name' => '邮箱地址',
-                    'type' => 'input',
-                    'placeholder' => '申请联系人的邮箱地址',
                     'required' => true,
                 ],
                 'proxy' => [
@@ -387,6 +407,7 @@ location / {
         $class = "\\app\\lib\\cert\\{$type}";
         if (class_exists($class)) {
             $config = json_decode($account['config'], true);
+            if (!is_array($config)) $config = [];
             $ext = $account['ext'] ? json_decode($account['ext'], true) : null;
             $model = new $class($config, $ext);
             return $model;

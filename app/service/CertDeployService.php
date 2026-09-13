@@ -29,7 +29,7 @@ class CertDeployService
         $this->client = DeployHelper::getModel($this->aid);
         if (!$this->client) throw new Exception('该自动部署任务类型不存在', 102);
 
-        $this->info = $task['info'] ? json_decode($task['info'], true) : null;
+        $this->info = $task['info'] ? json_decode($task['info'], true) : [];
     }
 
     public function process($isManual = false)
@@ -70,8 +70,15 @@ class CertDeployService
             $this->saveResult(-1, $e->getMessage(), date('Y-m-d H:i:s', time() + (array_key_exists($this->task['retry'], self::$retry_interval) ? self::$retry_interval[$this->task['retry']] : 3600)));
             throw $e;
         } finally {
-            if($this->info){
-                Db::name('cert_deploy')->where('id', $this->task['id'])->update(['info' => json_encode($this->info)]);
+            if ($this->info && is_array($this->info)) {
+                if (isset($this->info['config']) && is_array($this->info['config'])) {
+                    $config = array_merge(json_decode($this->task['config'], true), $this->info['config']);
+                    Db::name('cert_deploy')->where('id', $this->task['id'])->update(['config' => json_encode($config)]);
+                    unset($this->info['config']);
+                }
+                if (!empty($this->info)) {
+                    Db::name('cert_deploy')->where('id', $this->task['id'])->update(['info' => json_encode($this->info)]);
+                }
             }
         }
     }
@@ -92,7 +99,7 @@ class CertDeployService
         if (!empty($error) && strlen($error) > 300) {
             $error = mb_strcut($error, 0, 300);
         }
-        $update = ['status' => $status, 'error' => $error, 'retrytime' => $retrytime];
+        $update = ['status' => $status, 'error' => $error ? str_replace(["\r", "\n"], '', $error) : null, 'retrytime' => $retrytime];
         if ($status == 1){
             $update['retry'] = 0;
             $update['lasttime'] = date('Y-m-d H:i:s');

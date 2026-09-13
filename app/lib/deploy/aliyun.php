@@ -54,6 +54,8 @@ class aliyun implements DeployInterface
                 $this->deploy_oss($cert_id, $config);
             } elseif ($config['product'] == 'waf') {
                 $this->deploy_waf($cert_id, $config);
+            } elseif ($config['product'] == 'wafres') {
+                $this->deploy_waf_res($cert_id, $config);
             } elseif ($config['product'] == 'waf2') {
                 $this->deploy_waf2($cert_id, $config);
             } elseif ($config['product'] == 'ddoscoo') {
@@ -66,6 +68,11 @@ class aliyun implements DeployInterface
                 $this->deploy_alb($cert_id, $config);
             } elseif ($config['product'] == 'nlb') {
                 $this->deploy_nlb($cert_id, $config);
+            } elseif ($config['product'] == 'esa_saas') {
+                $this->deploy_esa_saas($cert_id, $config);
+            } elseif ($config['product'] == 'ga') {
+                $this->deploy_ga($cert_id, $config);
+            } elseif ($config['product'] == 'upload') {
             } else {
                 throw new Exception('未知的产品类型');
             }
@@ -131,36 +138,98 @@ class aliyun implements DeployInterface
 
     private function deploy_cdn($cert_id, $cert_name, $config)
     {
-        $domain = $config['domain'];
-        if (empty($domain)) throw new Exception('CDN绑定域名不能为空');
+        if (empty($config['domain'])) throw new Exception('CDN绑定域名不能为空');
         $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, 'cdn.aliyuncs.com', '2018-05-10', $this->proxy);
-        $param = [
-            'Action' => 'SetCdnDomainSSLCertificate',
-            'DomainName' => $domain,
-            'CertName' => $cert_name,
-            'CertType' => 'cas',
-            'SSLProtocol' => 'on',
-            'CertId' => $cert_id,
-        ];
-        $client->request($param);
-        $this->log('CDN域名 ' . $domain . ' 部署证书成功！');
+        foreach (explode(',', $config['domain']) as $domain) {
+            $param = [
+                'Action' => 'SetCdnDomainSSLCertificate',
+                'DomainName' => $domain,
+                'CertName' => $cert_name,
+                'CertType' => 'cas',
+                'SSLProtocol' => 'on',
+                'CertId' => $cert_id,
+            ];
+            $client->request($param);
+            $this->log('CDN域名 ' . $domain . ' 部署证书成功！');
+        }
     }
 
     private function deploy_dcdn($cert_id, $cert_name, $config)
     {
-        $domain = $config['domain'];
-        if (empty($domain)) throw new Exception('DCDN绑定域名不能为空');
+        if (empty($config['domain'])) throw new Exception('DCDN绑定域名不能为空');
         $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, 'dcdn.aliyuncs.com', '2018-01-15', $this->proxy);
+        foreach (explode(',', $config['domain']) as $domain) {
+            $param = [
+                'Action' => 'SetDcdnDomainSSLCertificate',
+                'DomainName' => $domain,
+                'CertName' => $cert_name,
+                'CertType' => 'cas',
+                'SSLProtocol' => 'on',
+                'CertId' => $cert_id,
+            ];
+            $client->request($param);
+            $this->log('DCDN域名 ' . $domain . ' 部署证书成功！');
+        }
+    }
+
+    private function deploy_esa_saas($cas_id, $config)
+    {
+        $sitename = $config['esa_sitename'];
+        $saas_sitename = $config['esa_saas_sitename'];
+        if (empty($sitename)) throw new Exception('ESA站点名称不能为空');
+        if (empty($saas_sitename)) throw new Exception('ESA SAAS域名不能为空');
+
+        if ($config['region'] == 'ap-southeast-1') {
+            $endpoint = 'esa.ap-southeast-1.aliyuncs.com';
+        } else {
+            $endpoint = 'esa.cn-hangzhou.aliyuncs.com';
+        }
+
+        $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, $endpoint, '2024-09-10');
         $param = [
-            'Action' => 'SetDcdnDomainSSLCertificate',
-            'DomainName' => $domain,
-            'CertName' => $cert_name,
-            'CertType' => 'cas',
-            'SSLProtocol' => 'on',
-            'CertId' => $cert_id,
+            'Action' => 'ListSites',
+            'SiteName' => $sitename,
+            'SiteSearchType' => 'exact',
         ];
-        $client->request($param);
-        $this->log('DCDN域名 ' . $domain . ' 部署证书成功！');
+        try {
+            $data = $client->request($param, 'GET');
+        } catch (Exception $e) {
+            throw new Exception('查询ESA站点列表失败：' . $e->getMessage());
+        }
+        if ($data['TotalCount'] == 0) throw new Exception('ESA站点 ' . $sitename . ' 不存在');
+        $this->log('成功查询到' . $data['TotalCount'] . '个ESA站点');
+        $site_id = $data['Sites'][0]['SiteId'];
+        // 查询对应的saas域名
+        $param = [
+            'Action' => 'ListCustomHostnames',
+            'SiteName' => $saas_sitename,
+            'SiteId' => $site_id,
+            'SiteSearchType' => 'exact',
+        ];
+        try {
+            $saas_data = $client->request($param, 'GET');
+        } catch (Exception $e) {
+            throw new Exception('查询ESA saas域名失败：' . $e->getMessage());
+        }
+        if ($saas_data['TotalCount'] == 0) throw new Exception('ESA saas站点 ' . $saas_sitename . ' 不存在');
+        $saas_hostname_id = $saas_data['Hostnames'][0]['HostnameId'];
+
+        $param = [
+            'Action' => 'UpdateCustomHostname',
+            'HostnameId' => $saas_hostname_id,
+            'SslFlag' => 'on',
+            'CertType' => 'cas',
+            'CasId' => $cas_id,
+            'CasRegion' => $config['region'],
+        ];
+        $this->log('ESA SAAS站点部署参数 ' . json_encode($param));
+        try {
+            $saas_deploy_result = $client->request($param);
+            $this->log('ESA SAAS站点部署结果 ' . json_encode($saas_deploy_result));
+        } catch (Exception $e) {
+            throw new Exception('部署失败：' . $e->getMessage());
+        }
+        $this->log('ESA SAAS站点 ' . $saas_sitename . ' 证书添加成功！');
     }
 
     private function deploy_esa($cas_id, $cert_name, $config)
@@ -200,11 +269,11 @@ class aliyun implements DeployInterface
         }
         $this->log('ESA站点 ' . $sitename . ' 查询到' . $data['TotalCount'] . '个SSL证书');
 
-        $exist_cert_id = null;
-        $exist_cert_name = null;
-        $exist_cert_casid = null;
+        $exist_cert = null;
+        $oldest_cert = null;
         if ($data['TotalCount'] > 0) {
             foreach ($data['Result'] as $cert) {
+                if ($cert['Type'] == 'free') continue;
                 $domains = explode(',', $cert['SAN']);
                 $flag = true;
                 foreach ($domains as $domain) {
@@ -214,10 +283,39 @@ class aliyun implements DeployInterface
                     }
                 }
                 if ($flag) {
-                    $exist_cert_id = $cert['Id'];
-                    $exist_cert_name = $cert['Name'];
-                    $exist_cert_casid = isset($cert['CasId']) ? $cert['CasId'] : null;
+                    $exist_cert = $cert;
                     break;
+                }
+                if (!$oldest_cert) {
+                    $oldest_cert = $cert;
+                } elseif (strtotime($cert['CreateTime']) < strtotime($oldest_cert['CreateTime'])) {
+                    $oldest_cert = $cert;
+                }
+            }
+        }
+
+        if (!$exist_cert) { //新增证书时，若配额已满，则删除最旧的证书
+            $param = [
+                'Action' => 'ListInstanceQuotasWithUsage',
+                'SiteId' => $site_id,
+                'QuotaNames' => 'customHttpCert',
+            ];
+            try {
+                $data = $client->request($param, 'GET');
+            } catch (Exception $e) {
+                throw new Exception('查询ESA站点证书配额失败：' . $e->getMessage());
+            }
+            if (!empty($data['Quotas']) && intval($data['Quotas'][0]['Usage']) >= intval($data['Quotas'][0]['QuotaValue']) && $oldest_cert) {
+                $param = [
+                    'Action' => 'DeleteCertificate',
+                    'SiteId' => $site_id,
+                    'Id' => $oldest_cert['Id'],
+                ];
+                try {
+                    $client->request($param, 'GET');
+                    $this->log('ESA站点 ' . $sitename . ' 删除证书 ' . $oldest_cert['Name'] . ' 成功');
+                } catch (Exception $e) {
+                    throw new Exception('ESA站点 ' . $sitename . ' 删除证书' . $oldest_cert['Name'] . '失败：' . $e->getMessage());
                 }
             }
         }
@@ -231,10 +329,10 @@ class aliyun implements DeployInterface
             'Region' => $config['region'],
         ];
 
-        if ($exist_cert_id) {
-            $param['Id'] = $exist_cert_id;
+        if ($exist_cert) {
+            $param['Id'] = $exist_cert['Id'];
 
-            if ($exist_cert_casid == $cas_id) {
+            if (isset($exist_cert['CasId']) && $exist_cert['CasId'] == $cas_id) {
                 $this->log('ESA站点 ' . $sitename . ' 证书已配置，无需重复操作');
                 return;
             }
@@ -242,8 +340,8 @@ class aliyun implements DeployInterface
 
         $client->request($param);
 
-        if ($exist_cert_name) {
-            $this->log('ESA站点 ' . $sitename . ' 证书 ' . $exist_cert_name . ' 更新成功');
+        if ($exist_cert) {
+            $this->log('ESA站点 ' . $sitename . ' 证书 ' . $exist_cert['Name'] . ' 更新成功');
         } else {
             $this->log('ESA站点 ' . $sitename . ' 证书添加成功！');
         }
@@ -255,14 +353,16 @@ class aliyun implements DeployInterface
         if (empty($config['oss_endpoint'])) throw new Exception('OSS Endpoint不能为空');
         if (empty($config['oss_bucket'])) throw new Exception('OSS Bucket不能为空');
         $client = new AliyunOSS($this->AccessKeyId, $this->AccessKeySecret, $config['oss_endpoint']);
-        $client->addBucketCnameCert($config['oss_bucket'], $config['domain'], $cert_id . '-cn-hangzhou');
-        $this->log('OSS域名 ' . $config['domain'] . ' 部署证书成功！');
+        foreach (explode(',', $config['domain']) as $domain) {
+            if (empty($domain)) continue;
+            $client->addBucketCnameCert($config['oss_bucket'], $domain, $cert_id . '-cn-hangzhou');
+            $this->log('OSS域名 ' . $domain . ' 部署证书成功！');
+        }
     }
 
     private function deploy_waf($cert_id, $config)
     {
-        $domain = $config['domain'];
-        if (empty($domain)) throw new Exception('WAF绑定域名不能为空');
+        if (empty($config['domain'])) throw new Exception('WAF绑定域名不能为空');
 
         if ($config['region'] == 'ap-southeast-1') {
             $cert_id .= '-ap-southeast-1';
@@ -287,49 +387,176 @@ class aliyun implements DeployInterface
         $instance_id = $data['InstanceId'];
         $this->log('获取WAF实例ID成功 InstanceId=' . $instance_id);
 
+        foreach (explode(',', $config['domain']) as $domain) {
+            $param = [
+                'Action' => 'DescribeDomainDetail',
+                'InstanceId' => $instance_id,
+                'Domain' => $domain,
+                'RegionId' => $config['region'],
+            ];
+            try {
+                $data = $client->request($param, 'GET');
+            } catch (Exception $e) {
+                throw new Exception('查询CNAME接入详情失败：' . $e->getMessage());
+            }
+            if (!isset($data['Listen'])) {
+                throw new Exception('没有找到' . $domain . '监听器');
+            }
+
+            if (isset($data['Listen']['CertId'])) {
+                $old_cert_id = $data['Listen']['CertId'];
+                if (!empty($old_cert_id) && $old_cert_id == $cert_id) {
+                    $this->log('WAF域名 ' . $domain . ' 证书已配置，无需重复操作');
+                    return;
+                }
+            }
+
+            $data['Listen']['CertId'] = $cert_id;
+            if (empty($data['Listen']['HttpsPorts'])) {
+                $data['Listen']['HttpsPorts'] = [443];
+                $data['Listen']['TLSVersion'] = 'tlsv1.1';
+                $data['Listen']['EnableTLSv3'] = true;
+                $data['Listen']['CipherSuite'] = 1;
+            }
+            if (count($data['Redirect']['BackendPorts']) == 1 && $data['Redirect']['BackendPorts'][0]['Protocol'] == 'http') {
+                $data['Redirect']['BackendPorts'][] = [
+                    'ListenPort' => 443,
+                    'Protocol' => 'https',
+                    'BackendPort' => $data['Redirect']['BackendPorts'][0]['BackendPort'],
+                ];
+                $data['Redirect']['FocusHttpBackend'] = true;
+            }
+            $data['Redirect']['Backends'] = $data['Redirect']['AllBackends'];
+            $param = [
+                'Action' => 'ModifyDomain',
+                'InstanceId' => $instance_id,
+                'Domain' => $domain,
+                'Listen' => json_encode($data['Listen']),
+                'Redirect' => json_encode($data['Redirect']),
+                'RegionId' => $config['region'],
+            ];
+            $data = $client->request($param);
+
+            $this->log('WAF域名 ' . $domain . ' 部署证书成功！');
+        }
+    }
+
+    private function deploy_waf_res($cert_id, $config)
+    {
+        if (empty($config['waf_resource_id'])) throw new Exception('云产品防护对象ID不能为空');
+        $deploy_type = isset($config['deploy_type']) ? intval($config['deploy_type']) : 0;
+
+        if ($config['region'] == 'ap-southeast-1') {
+            $cert_id .= '-ap-southeast-1';
+        } else {
+            $cert_id .= '-cn-hangzhou';
+        }
+
+        $endpoint = 'wafopenapi.' . $config['region'] . '.aliyuncs.com';
+
+        $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, $endpoint, '2021-10-01', $this->proxy);
+
         $param = [
-            'Action' => 'DescribeDomainDetail',
-            'InstanceId' => $instance_id,
-            'Domain' => $domain,
+            'Action' => 'DescribeInstance',
             'RegionId' => $config['region'],
         ];
         try {
             $data = $client->request($param, 'GET');
         } catch (Exception $e) {
-            throw new Exception('查询CNAME接入详情失败：' . $e->getMessage());
+            throw new Exception('获取WAF实例详情失败：' . $e->getMessage());
         }
-        if (!isset($data['Listen'])) {
-            throw new Exception('没有找到' . $domain . '监听器');
-        }
+        if (empty($data['InstanceId'])) throw new Exception('当前账号未找到WAF实例');
+        $instance_id = $data['InstanceId'];
+        $this->log('获取WAF实例ID成功 InstanceId=' . $instance_id);
 
-        if (isset($data['Listen']['CertId'])) {
-            $old_cert_id = $data['Listen']['CertId'];
-            if (!empty($old_cert_id) && $old_cert_id == $cert_id) {
-                $this->log('WAF域名 ' . $domain . ' 证书已配置，无需重复操作');
-                return;
+        foreach (explode(',', $config['waf_resource_id']) as $waf_resource_id) {
+            $parts = explode('-', $waf_resource_id);
+            $resource_instance_id = $parts[count($parts) - 3] ?? '';
+            if (empty($resource_instance_id)) {
+                throw new Exception('ResourceInstanceId解析失败：' . $waf_resource_id);
+            }
+            $param = [
+                'Action' => 'DescribeCloudResourceList',
+                'InstanceId' => $instance_id,
+                'CloudResourceId' => $waf_resource_id,
+                'RegionId' => $config['region'],
+            ];
+            try {
+                $data = $client->request($param, 'GET');
+            } catch (Exception $e) {
+                throw new Exception('查询云产品接入WAF配置失败：' . $e->getMessage());
+            }
+            if (empty($data['CloudResourceList'])) {
+                throw new Exception('WAF云产品接入实例不存在：' . $waf_resource_id);
+            }
+
+            if ($deploy_type == 0) {
+                $param = [
+                    'Action' => 'ModifyCloudResourceDefaultCert',
+                    'InstanceId' => $instance_id,
+                    'CloudResourceId' => $waf_resource_id,
+                    'CertId' => $cert_id,
+                    'RegionId' => $config['region'],
+                ];
+                $client->request($param);
+                $this->log('WAF云产品防护对象 ' . $waf_resource_id . ' 部署默认证书成功！');
+            } else {
+                $param = [
+                    'Action' => 'CreateCloudResourceExtensionCert',
+                    'InstanceId' => $instance_id,
+                    'CloudResourceId' => $waf_resource_id,
+                    'CertId' => $cert_id,
+                    'RegionId' => $config['region'],
+                ];
+                $client->request($param);
+                $this->log('WAF云产品防护对象 ' . $waf_resource_id . ' 部署扩展证书成功！');
+
+                $this->clean_waf_res_expired_certs($client, $instance_id, $resource_instance_id, $waf_resource_id, $config['region']);
             }
         }
+    }
 
-        $data['Listen']['CertId'] = $cert_id;
-        if (empty($data['Listen']['HttpsPorts'])) $data['Listen']['HttpsPorts'] = [443];
-        $data['Redirect']['Backends'] = $data['Redirect']['AllBackends'];
+    private function clean_waf_res_expired_certs($client, $instance_id, $resource_instance_id, $waf_resource_id, $region)
+    {
         $param = [
-            'Action' => 'ModifyDomain',
+            'Action' => 'DescribeResourceInstanceCerts',
             'InstanceId' => $instance_id,
-            'Domain' => $domain,
-            'Listen' => json_encode($data['Listen']),
-            'Redirect' => json_encode($data['Redirect']),
-            'RegionId' => $config['region'],
+            'ResourceInstanceId' => $resource_instance_id,
+            'RegionId' => $region,
         ];
-        $data = $client->request($param);
+        try {
+            $data = $client->request($param, 'GET');
+        } catch (Exception $e) {
+            $this->log('查询扩展证书列表失败：' . $e->getMessage());
+            return;
+        }
+        if (empty($data['Certs'])) return;
 
-        $this->log('WAF域名 ' . $domain . ' 部署证书成功！');
+        $now = time();
+        foreach ($data['Certs'] as $cert) {
+            if (empty($cert['CertIdentifier']) || empty($cert['AfterDate'])) continue;
+            $expire_time = strtotime($cert['AfterDate']);
+            if ($expire_time !== false && $expire_time < $now) {
+                $param = [
+                    'Action' => 'DeleteCloudResourceExtensionCert',
+                    'InstanceId' => $instance_id,
+                    'CloudResourceId' => $waf_resource_id,
+                    'CertId' => $cert['CertIdentifier'],
+                    'RegionId' => $region,
+                ];
+                try {
+                    $client->request($param);
+                    $this->log('已删除过期扩展证书：' . $cert['CertIdentifier']);
+                } catch (Exception $e) {
+                    $this->log('删除过期扩展证书失败：' . $cert['CertIdentifier'] . ' ' . $e->getMessage());
+                }
+            }
+        }
     }
 
     private function deploy_waf2($cert_id, $config)
     {
-        $domain = $config['domain'];
-        if (empty($domain)) throw new Exception('WAF绑定域名不能为空');
+        if (empty($config['domain'])) throw new Exception('WAF绑定域名不能为空');
 
         $endpoint = 'wafopenapi.' . $config['region'] . '.aliyuncs.com';
 
@@ -348,23 +575,24 @@ class aliyun implements DeployInterface
         $instance_id = $data['InstanceInfo']['InstanceId'];
         $this->log('获取WAF实例ID成功 InstanceId=' . $instance_id);
 
-        $param = [
-            'Action' => 'CreateCertificateByCertificateId',
-            'InstanceId' => $instance_id,
-            'Domain' => $domain,
-            'CertificateId' => $cert_id,
-        ];
-        $client->request($param);
+        foreach (explode(',', $config['domain']) as $domain) {
+            $param = [
+                'Action' => 'CreateCertificateByCertificateId',
+                'InstanceId' => $instance_id,
+                'Domain' => $domain,
+                'CertificateId' => $cert_id,
+            ];
+            $client->request($param);
 
-        $this->log('WAF域名 ' . $domain . ' 部署证书成功！');
+            $this->log('WAF域名 ' . $domain . ' 部署证书成功！');
+        }
     }
 
     private function deploy_api($fullchain, $privatekey, $config)
     {
-        $domain = $config['domain'];
         $groupid = $config['api_groupid'];
         if (empty($groupid)) throw new Exception('API分组ID不能为空');
-        if (empty($domain)) throw new Exception('API分组绑定域名不能为空');
+        if (empty($config['domain'])) throw new Exception('API分组绑定域名不能为空');
 
         $certInfo = openssl_x509_parse($fullchain, true);
         if (!$certInfo) throw new Exception('证书解析失败');
@@ -374,76 +602,80 @@ class aliyun implements DeployInterface
 
         $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, $endpoint, '2016-07-14', $this->proxy);
 
-        $param = [
-            'Action' => 'SetDomainCertificate',
-            'GroupId' => $groupid,
-            'DomainName' => $domain,
-            'CertificateName' => $cert_name,
-            'CertificateBody' => $fullchain,
-            'CertificatePrivateKey' => $privatekey,
-        ];
-        $client->request($param);
+        foreach (explode(',', $config['domain']) as $domain) {
+            $param = [
+                'Action' => 'SetDomainCertificate',
+                'GroupId' => $groupid,
+                'DomainName' => $domain,
+                'CertificateName' => $cert_name,
+                'CertificateBody' => $fullchain,
+                'CertificatePrivateKey' => $privatekey,
+            ];
+            $client->request($param);
 
-        $this->log('API网关域名 ' . $domain . ' 部署证书成功！');
+            $this->log('API网关域名 ' . $domain . ' 部署证书成功！');
+        }
     }
 
     private function deploy_ddoscoo($cert_id, $config)
     {
-        $domain = $config['domain'];
-        if (empty($domain)) throw new Exception('绑定域名不能为空');
+        if (empty($config['domain'])) throw new Exception('绑定域名不能为空');
 
         $endpoint = 'ddoscoo.' . $config['region'] . '.aliyuncs.com';
 
         $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, $endpoint, '2020-01-01', $this->proxy);
 
-        $param = [
-            'Action' => 'AssociateWebCert',
-            'Domain' => $domain,
-            'CertId' => $cert_id,
-        ];
-        $client->request($param);
+        foreach (explode(',', $config['domain']) as $domain) {
+            $param = [
+                'Action' => 'AssociateWebCert',
+                'Domain' => $domain,
+                'CertId' => $cert_id,
+            ];
+            $client->request($param);
 
-        $this->log('DDoS高防域名 ' . $domain . ' 部署证书成功！');
+            $this->log('DDoS高防域名 ' . $domain . ' 部署证书成功！');
+        }
     }
 
     private function deploy_live($cert_id, $cert_name, $config)
     {
-        $domain = $config['domain'];
-        if (empty($domain)) throw new Exception('视频直播绑定域名不能为空');
+        if (empty($config['domain'])) throw new Exception('视频直播绑定域名不能为空');
         $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, 'live.aliyuncs.com', '2016-11-01', $this->proxy);
-        $param = [
-            'Action' => 'SetLiveDomainCertificate',
-            'DomainName' => $domain,
-            'CertName' => $cert_name,
-            'CertType' => 'cas',
-            'SSLProtocol' => 'on',
-            'CertId' => $cert_id,
-        ];
-        $client->request($param);
-        $this->log('设置视频直播域名 ' . $domain . ' 证书成功！');
+        foreach (explode(',', $config['domain']) as $domain) {
+            $param = [
+                'Action' => 'SetLiveDomainCertificate',
+                'DomainName' => $domain,
+                'CertName' => $cert_name,
+                'CertType' => 'cas',
+                'SSLProtocol' => 'on',
+                'CertId' => $cert_id,
+            ];
+            $client->request($param);
+            $this->log('设置视频直播域名 ' . $domain . ' 证书成功！');
+        }
     }
 
     private function deploy_vod($fullchain, $privatekey, $config)
     {
-        $domain = $config['domain'];
-        if (empty($domain)) throw new Exception('视频点播绑定域名不能为空');
+        if (empty($config['domain'])) throw new Exception('视频点播绑定域名不能为空');
         $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, 'vod.cn-shanghai.aliyuncs.com', '2017-03-21', $this->proxy);
-        $param = [
-            'Action' => 'SetVodDomainCertificate',
-            'DomainName' => $domain,
-            'SSLProtocol' => 'on',
-            'SSLPub' => $fullchain,
-            'SSLPri' => $privatekey,
-        ];
-        $client->request($param);
-        $this->log('视频点播域名 ' . $domain . ' 部署证书成功！');
+        foreach (explode(',', $config['domain']) as $domain) {
+            $param = [
+                'Action' => 'SetVodDomainCertificate',
+                'DomainName' => $domain,
+                'SSLProtocol' => 'on',
+                'SSLPub' => $fullchain,
+                'SSLPri' => $privatekey,
+            ];
+            $client->request($param);
+            $this->log('视频点播域名 ' . $domain . ' 部署证书成功！');
+        }
     }
 
     private function deploy_fc($fullchain, $privatekey, $config)
     {
-        $domain = $config['domain'];
         $fc_cname = $config['fc_cname'];
-        if (empty($domain)) throw new Exception('函数计算域名不能为空');
+        if (empty($config['domain'])) throw new Exception('函数计算域名不能为空');
         if (empty($fc_cname)) throw new Exception('域名CNAME地址不能为空');
 
         $certInfo = openssl_x509_parse($fullchain, true);
@@ -452,41 +684,42 @@ class aliyun implements DeployInterface
 
         $client = new AliyunNewClient($this->AccessKeyId, $this->AccessKeySecret, $fc_cname, '2023-03-30', $this->proxy);
 
-        try {
-            $data = $client->request('GET', 'GetCustomDomain', '/2023-03-30/custom-domains/' . $domain);
-        } catch (Exception $e) {
-            throw new Exception('获取绑定域名信息失败：' . $e->getMessage());
+        foreach (explode(',', $config['domain']) as $domain) {
+            try {
+                $data = $client->request('GET', 'GetCustomDomain', '/2023-03-30/custom-domains/' . $domain);
+            } catch (Exception $e) {
+                throw new Exception('获取绑定域名信息失败：' . $e->getMessage());
+            }
+            $this->log('获取函数计算绑定域名信息成功');
+
+            if (isset($data['certConfig']['certificate']) && $data['certConfig']['certificate'] == $fullchain) {
+                $this->log('函数计算域名 ' . $domain . ' 证书已配置，无需重复操作');
+                return;
+            }
+
+            if ($data['protocol'] == 'HTTP') $data['protocol'] = 'HTTP,HTTPS';
+            $data['certConfig']['certName'] = $cert_name;
+            $data['certConfig']['certificate'] = $fullchain;
+            $data['certConfig']['privateKey'] = $privatekey;
+
+            $param = [
+                'authConfig' => $data['authConfig'],
+                'certConfig' => $data['certConfig'],
+                'protocol' => $data['protocol'],
+                'routeConfig' => $data['routeConfig'],
+                'tlsConfig' => $data['tlsConfig'],
+                'wafConfig' => $data['wafConfig'],
+            ];
+            $client->request('PUT', 'UpdateCustomDomain', '/2023-03-30/custom-domains/' . $domain, $param);
+
+            $this->log('函数计算域名 ' . $domain . ' 部署证书成功！');
         }
-        $this->log('获取函数计算绑定域名信息成功');
-
-        if (isset($data['certConfig']['certificate']) && $data['certConfig']['certificate'] == $fullchain) {
-            $this->log('函数计算域名 ' . $domain . ' 证书已配置，无需重复操作');
-            return;
-        }
-
-        if ($data['protocol'] == 'HTTP') $data['protocol'] = 'HTTP,HTTPS';
-        $data['certConfig']['certName'] = $cert_name;
-        $data['certConfig']['certificate'] = $fullchain;
-        $data['certConfig']['privateKey'] = $privatekey;
-
-        $param = [
-            'authConfig' => $data['authConfig'],
-            'certConfig' => $data['certConfig'],
-            'protocol' => $data['protocol'],
-            'routeConfig' => $data['routeConfig'],
-            'tlsConfig' => $data['tlsConfig'],
-            'wafConfig' => $data['wafConfig'],
-        ];
-        $client->request('PUT', 'UpdateCustomDomain', '/2023-03-30/custom-domains/' . $domain, $param);
-
-        $this->log('函数计算域名 ' . $domain . ' 部署证书成功！');
     }
 
     private function deploy_fc2($fullchain, $privatekey, $config)
     {
-        $domain = $config['domain'];
         $fc_cname = $config['fc_cname'];
-        if (empty($domain)) throw new Exception('函数计算域名不能为空');
+        if (empty($config['domain'])) throw new Exception('函数计算域名不能为空');
         if (empty($fc_cname)) throw new Exception('域名CNAME地址不能为空');
 
         $certInfo = openssl_x509_parse($fullchain, true);
@@ -495,33 +728,35 @@ class aliyun implements DeployInterface
 
         $client = new AliyunNewClient($this->AccessKeyId, $this->AccessKeySecret, $fc_cname, '2021-04-06', $this->proxy);
 
-        try {
-            $data = $client->request('GET', 'GetCustomDomain', '/2021-04-06/custom-domains/' . $domain);
-        } catch (Exception $e) {
-            throw new Exception('获取绑定域名信息失败：' . $e->getMessage());
+        foreach (explode(',', $config['domain']) as $domain) {
+            try {
+                $data = $client->request('GET', 'GetCustomDomain', '/2021-04-06/custom-domains/' . $domain);
+            } catch (Exception $e) {
+                throw new Exception('获取绑定域名信息失败：' . $e->getMessage());
+            }
+            $this->log('获取函数计算绑定域名信息成功');
+
+            if (isset($data['certConfig']['certificate']) && $data['certConfig']['certificate'] == $fullchain) {
+                $this->log('函数计算域名 ' . $domain . ' 证书已配置，无需重复操作');
+                return;
+            }
+
+            if ($data['protocol'] == 'HTTP') $data['protocol'] = 'HTTP,HTTPS';
+            $data['certConfig']['certName'] = $cert_name;
+            $data['certConfig']['certificate'] = $fullchain;
+            $data['certConfig']['privateKey'] = $privatekey;
+
+            $param = [
+                'protocol' => $data['protocol'],
+                'routeConfig' => $data['routeConfig'],
+                'certConfig' => $data['certConfig'],
+                'tlsConfig' => $data['tlsConfig'],
+                'wafConfig' => $data['wafConfig'],
+            ];
+            $client->request('PUT', 'UpdateCustomDomain', '/2021-04-06/custom-domains/' . $domain, $param);
+
+            $this->log('函数计算域名 ' . $domain . ' 部署证书成功！');
         }
-        $this->log('获取函数计算绑定域名信息成功');
-
-        if (isset($data['certConfig']['certificate']) && $data['certConfig']['certificate'] == $fullchain) {
-            $this->log('函数计算域名 ' . $domain . ' 证书已配置，无需重复操作');
-            return;
-        }
-
-        if ($data['protocol'] == 'HTTP') $data['protocol'] = 'HTTP,HTTPS';
-        $data['certConfig']['certName'] = $cert_name;
-        $data['certConfig']['certificate'] = $fullchain;
-        $data['certConfig']['privateKey'] = $privatekey;
-
-        $param = [
-            'protocol' => $data['protocol'],
-            'routeConfig' => $data['routeConfig'],
-            'certConfig' => $data['certConfig'],
-            'tlsConfig' => $data['tlsConfig'],
-            'wafConfig' => $data['wafConfig'],
-        ];
-        $client->request('PUT', 'UpdateCustomDomain', '/2021-04-06/custom-domains/' . $domain, $param);
-
-        $this->log('函数计算域名 ' . $domain . ' 部署证书成功！');
     }
 
     private function deploy_clb($cert_id, $cert_name, $config)
@@ -568,36 +803,65 @@ class aliyun implements DeployInterface
             $this->log('找到已添加的服务器证书 ServerCertificateId=' . $ServerCertificateId);
         }
 
-        $param = [
-            'Action' => 'DescribeLoadBalancerHTTPSListenerAttribute',
-            'RegionId' => $config['regionid'],
-            'LoadBalancerId' => $config['clb_id'],
-            'ListenerPort' => $config['clb_port'],
-        ];
-        try {
-            $data = $client->request($param);
-        } catch (Exception $e) {
-            throw new Exception('HTTPS监听配置查询失败：' . $e->getMessage());
-        }
+        $deploy_type = isset($config['deploy_type']) ? intval($config['deploy_type']) : 0;
+        if ($deploy_type == 1) {
+            if (empty($config['clb_domain'])) throw new Exception('扩展域名不能为空');
+            $domains = explode(',', $config['clb_domain']);
+            $param = [
+                'Action' => 'DescribeDomainExtensions',
+                'RegionId' => $config['regionid'],
+                'LoadBalancerId' => $config['clb_id'],
+                'ListenerPort' => $config['clb_port'],
+            ];
+            try {
+                $data = $client->request($param);
+            } catch (Exception $e) {
+                throw new Exception('扩展域名列表查询失败：' . $e->getMessage());
+            }
+            foreach ($data['DomainExtensions']['DomainExtension'] as $item) {
+                if (in_array($item['Domain'], $domains)) {
+                    if ($ServerCertificateId == $item['ServerCertificateId']) {
+                        $this->log('负载均衡HTTPS扩展域名 ' . $item['Domain'] . ' 证书已配置');
+                    } else {
+                        $param = [
+                            'Action' => 'SetDomainExtensionAttribute',
+                            'RegionId' => $config['regionid'],
+                            'DomainExtensionId' => $item['DomainExtensionId'],
+                            'ServerCertificateId' => $ServerCertificateId,
+                        ];
+                        $client->request($param);
+                        $this->log('负载均衡HTTPS扩展域名 ' . $item['Domain'] . ' 证书更新成功');
+                    }
+                }
+            }
+        } else {
+            $param = [
+                'Action' => 'DescribeLoadBalancerHTTPSListenerAttribute',
+                'RegionId' => $config['regionid'],
+                'LoadBalancerId' => $config['clb_id'],
+                'ListenerPort' => $config['clb_port'],
+            ];
+            try {
+                $data = $client->request($param);
+            } catch (Exception $e) {
+                throw new Exception('HTTPS监听配置查询失败：' . $e->getMessage());
+            }
 
-        if ($data['ServerCertificateId'] == $ServerCertificateId) {
-            $this->log('负载均衡HTTPS监听已配置该证书，无需重复操作');
-            return;
-        }
+            if ($data['ServerCertificateId'] == $ServerCertificateId) {
+                $this->log('负载均衡HTTPS监听已配置该证书，无需重复操作');
+                return;
+            }
 
-        $param = [
-            'Action' => 'SetLoadBalancerHTTPSListenerAttribute',
-            'RegionId' => $config['regionid'],
-            'LoadBalancerId' => $config['clb_id'],
-            'ListenerPort' => $config['clb_port'],
-        ];
-        $keys = ['Bandwidth', 'XForwardedFor', 'Scheduler', 'StickySession', 'StickySessionType', 'CookieTimeout', 'Cookie', 'HealthCheck', 'HealthCheckMethod', 'HealthCheckDomain', 'HealthCheckURI', 'HealthyThreshold', 'UnhealthyThreshold', 'HealthCheckTimeout', 'HealthCheckInterval', 'HealthCheckConnectPort', 'HealthCheckHttpCode', 'ServerCertificateId', 'CACertificateId', 'VServerGroup', 'VServerGroupId', 'XForwardedFor_SLBIP', 'XForwardedFor_SLBID', 'XForwardedFor_proto', 'Gzip', 'AclId', 'AclType', 'AclStatus', 'IdleTimeout', 'RequestTimeout', 'EnableHttp2', 'TLSCipherPolicy', 'Description', 'XForwardedFor_SLBPORT', 'XForwardedFor_ClientSrcPort'];
-        foreach ($keys as $key) {
-            if (isset($data[$key])) $param[$key] = $data[$key];
+            $param = [
+                'Action' => 'SetLoadBalancerHTTPSListenerAttribute',
+                'RegionId' => $config['regionid'],
+                'LoadBalancerId' => $config['clb_id'],
+                'ListenerPort' => $config['clb_port'],
+                'ServerCertificateId' => $ServerCertificateId,
+            ];
+            $client->request($param);
+            $this->log('负载均衡HTTPS监听证书配置成功！');
         }
-        $param['ServerCertificateId'] = $ServerCertificateId;
-        $client->request($param);
-        $this->log('负载均衡HTTPS监听证书配置成功！');
     }
 
     private function deploy_alb($cert_id, $config)
@@ -606,33 +870,44 @@ class aliyun implements DeployInterface
 
         $endpoint = 'alb.' . $config['regionid'] . '.aliyuncs.com';
         $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, $endpoint, '2020-06-16', $this->proxy);
+        $cert_id = $cert_id . '-cn-hangzhou';
+        $deploy_type = isset($config['deploy_type']) ? intval($config['deploy_type']) : 0;
 
-        $param = [
-            'Action' => 'ListListenerCertificates',
-            'MaxResults' => 100,
-            'ListenerId' => $config['alb_listener_id'],
-            'CertificateType' => 'Server',
-        ];
-        try {
-            $data = $client->request($param);
-        } catch (Exception $e) {
-            throw new Exception('获取监听证书列表失败：' . $e->getMessage());
-        }
-        foreach ($data['Certificates'] as $cert) {
-            if (strpos($cert['CertificateId'], '-')) $cert['CertificateId'] = substr($cert['CertificateId'], 0, strpos($cert['CertificateId'], '-'));
-            if ($cert['CertificateId'] == $cert_id) {
-                $this->log('负载均衡监听证书已添加，无需重复操作');
-                return;
+        if ($deploy_type == 1) {
+            $param = [
+                'Action' => 'ListListenerCertificates',
+                'MaxResults' => 100,
+                'ListenerId' => $config['alb_listener_id'],
+                'CertificateType' => 'Server',
+            ];
+            try {
+                $data = $client->request($param);
+            } catch (Exception $e) {
+                throw new Exception('获取监听证书列表失败：' . $e->getMessage());
             }
-        }
+            foreach ($data['Certificates'] as $cert) {
+                if ($cert['CertificateId'] == $cert_id) {
+                    $this->log('负载均衡监听扩展证书已添加，无需重复操作');
+                    return;
+                }
+            }
 
-        $param = [
-            'Action' => 'AssociateAdditionalCertificatesWithListener',
-            'ListenerId' => $config['alb_listener_id'],
-            'Certificates.1.CertificateId' => $cert_id . '-cn-hangzhou',
-        ];
-        $client->request($param);
-        $this->log('应用型负载均衡监听证书添加成功！');
+            $param = [
+                'Action' => 'AssociateAdditionalCertificatesWithListener',
+                'ListenerId' => $config['alb_listener_id'],
+                'Certificates.1.CertificateId' => $cert_id,
+            ];
+            $client->request($param);
+            $this->log('应用型负载均衡监听扩展证书添加成功！');
+        } else {
+            $param = [
+                'Action' => 'UpdateListenerAttribute',
+                'ListenerId' => $config['alb_listener_id'],
+                'Certificates.1.CertificateId' => $cert_id,
+            ];
+            $client->request($param);
+            $this->log('应用型负载均衡监听默认证书更新成功！');
+        }
     }
 
     private function deploy_nlb($cert_id, $config)
@@ -641,33 +916,122 @@ class aliyun implements DeployInterface
 
         $endpoint = 'nlb.' . $config['regionid'] . '.aliyuncs.com';
         $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, $endpoint, '2022-04-30', $this->proxy);
+        $cert_id = $cert_id . '-cn-hangzhou';
+        $deploy_type = isset($config['deploy_type']) ? intval($config['deploy_type']) : 0;
 
-        $param = [
-            'Action' => 'ListListenerCertificates',
-            'MaxResults' => 50,
-            'ListenerId' => $config['nlb_listener_id'],
-            'CertificateType' => 'Server',
-        ];
-        try {
-            $data = $client->request($param);
-        } catch (Exception $e) {
-            throw new Exception('获取监听证书列表失败：' . $e->getMessage());
-        }
-        foreach ($data['Certificates'] as $cert) {
-            if (strpos($cert['CertificateId'], '-')) $cert['CertificateId'] = substr($cert['CertificateId'], 0, strpos($cert['CertificateId'], '-'));
-            if ($cert['CertificateId'] == $cert_id) {
-                $this->log('负载均衡监听证书已添加，无需重复操作');
-                return;
+        if ($deploy_type == 1) {
+            $param = [
+                'Action' => 'ListListenerCertificates',
+                'MaxResults' => 50,
+                'ListenerId' => $config['nlb_listener_id'],
+                'CertificateType' => 'Server',
+            ];
+            try {
+                $data = $client->request($param);
+            } catch (Exception $e) {
+                throw new Exception('获取监听证书列表失败：' . $e->getMessage());
             }
-        }
+            foreach ($data['Certificates'] as $cert) {
+                if ($cert['CertificateId'] == $cert_id) {
+                    $this->log('负载均衡监听扩展证书已添加，无需重复操作');
+                    return;
+                }
+            }
 
-        $param = [
-            'Action' => 'AssociateAdditionalCertificatesWithListener',
-            'ListenerId' => $config['nlb_listener_id'],
-            'AdditionalCertificateIds.1' => $cert_id . '-cn-hangzhou',
-        ];
-        $client->request($param);
-        $this->log('网络型负载均衡监听证书添加成功！');
+            $param = [
+                'Action' => 'AssociateAdditionalCertificatesWithListener',
+                'ListenerId' => $config['nlb_listener_id'],
+                'AdditionalCertificateIds.1' => $cert_id,
+            ];
+            $client->request($param);
+            $this->log('网络型负载均衡监听扩展证书添加成功！');
+        } else {
+            $param = [
+                'Action' => 'UpdateListenerAttribute',
+                'ListenerId' => $config['nlb_listener_id'],
+                'CertificateIds.1' => $cert_id,
+            ];
+            $client->request($param);
+            $this->log('网络型负载均衡监听默认证书更新成功！');
+        }
+    }
+
+    private function deploy_ga($cert_id, $config)
+    {
+        if (empty($config['ga_id'])) throw new Exception('全球加速实例ID不能为空');
+        if (empty($config['ga_listener_id'])) throw new Exception('全球加速监听ID不能为空');
+
+        $client = new AliyunClient($this->AccessKeyId, $this->AccessKeySecret, 'ga.cn-hangzhou.aliyuncs.com', '2019-11-20', $this->proxy);
+        $cert_id = $cert_id . '-cn-hangzhou';
+        $deploy_type = isset($config['deploy_type']) ? intval($config['deploy_type']) : 0;
+
+        if ($deploy_type == 1) {
+            if (empty($config['clb_domain'])) throw new Exception('扩展域名不能为空');
+            $param = [
+                'Action' => 'ListListenerCertificates',
+                'RegionId' => 'cn-hangzhou',
+                'AcceleratorId' => $config['ga_id'],
+                'ListenerId' => $config['ga_listener_id'],
+            ];
+            try {
+                $data = $client->request($param);
+            } catch (Exception $e) {
+                throw new Exception('扩展域名列表查询失败：' . $e->getMessage());
+            }
+            $need_add = [];
+            foreach (explode(',', $config['clb_domain']) as $domain) {
+                $domainExists = false;
+                $exist_cert_id = null;
+                foreach ($data['Certificates'] as $cert) {
+                    if (isset($cert['Domain']) && $domain == $cert['Domain']) {
+                        $domainExists = true;
+                        $exist_cert_id = $cert['CertificateId'];
+                    }
+                }
+                if ($domainExists) {
+                    if ($exist_cert_id == $cert_id) {
+                        $this->log('全球加速实例监听扩展域名 ' . $domain . ' 证书已配置');
+                        continue;
+                    }
+                    $param = [
+                        'Action' => 'UpdateAdditionalCertificateWithListener',
+                        'RegionId' => 'cn-hangzhou',
+                        'AcceleratorId' => $config['ga_id'],
+                        'ListenerId' => $config['ga_listener_id'],
+                        'Domain' => $domain,
+                        'CertificateId' => $cert_id,
+                    ];
+                    $client->request($param);
+                    $this->log('全球加速实例监听扩展域名 ' . $domain . ' 替换证书成功！');
+                } else {
+                    $need_add[] = $domain;
+                }
+            }
+            if (count($need_add) > 0) {
+                $param = [
+                    'Action' => 'AssociateAdditionalCertificatesWithListener',
+                    'RegionId' => 'cn-hangzhou',
+                    'AcceleratorId' => $config['ga_id'],
+                    'ListenerId' => $config['ga_listener_id'],
+                ];
+                foreach ($need_add as $index => $domain) {
+                    $param['Certificates.' . ($index + 1) . '.Id'] = $cert_id;
+                    $param['Certificates.' . ($index + 1) . '.Domain'] = $domain;
+                }
+                $client->request($param);
+                $this->log('全球加速实例监听扩展域名 ' . implode(',', $need_add) . ' 绑定证书成功！');
+            }
+        } else {
+            $param = [
+                'Action' => 'UpdateListener',
+                'RegionId' => 'cn-hangzhou',
+                'AcceleratorId' => $config['ga_id'],
+                'ListenerId' => $config['ga_listener_id'],
+                'Certificates.1.Id' => $cert_id,
+            ];
+            $client->request($param);
+            $this->log('全球加速实例监听默认证书更新成功！');
+        }
     }
 
     public function setLogger($func)

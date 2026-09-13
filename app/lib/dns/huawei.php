@@ -18,8 +18,8 @@ class huawei implements DnsInterface
 
     public function __construct($config)
     {
-        $this->AccessKeyId = $config['ak'];
-        $this->SecretAccessKey = $config['sk'];
+        $this->AccessKeyId = $config['AccessKeyId'];
+        $this->SecretAccessKey = $config['SecretAccessKey'];
         $proxy = isset($config['proxy']) ? $config['proxy'] == 1 : false;
         $this->client = new HuaweiCloud($this->AccessKeyId, $this->SecretAccessKey, $this->endpoint, $proxy);
         $this->domain = $config['domain'];
@@ -60,10 +60,10 @@ class huawei implements DnsInterface
     }
 
     //获取解析记录列表
-    public function getDomainRecords($PageNumber = 1, $PageSize = 20, $KeyWord = null, $SubDomain = null, $Value = null, $Type = null, $Line = null, $Status = null)
+    public function getDomainRecords($PageNumber = 1, $PageSize = 20, $KeyWord = null, $SubDomain = null, $Value = null, $Type = null, $Line = null, $Status = null, $SortField = null, $SortOrder = 'asc')
     {
         $offset = ($PageNumber - 1) * $PageSize;
-        $query = ['type' => $Type, 'line_id' => $Line, 'name' => $KeyWord, 'offset' => $offset, 'limit' => $PageSize];
+        $query = ['type' => $Type, 'line_id' => $Line, 'name' => $KeyWord, 'offset' => $offset, 'limit' => $PageSize, 'records' => $Value];
         if (!isNullOrEmpty($Status)) {
             $Status = $Status == '1' ? 'ACTIVE' : 'DISABLE';
             $query['status'] = $Status;
@@ -73,16 +73,23 @@ class huawei implements DnsInterface
             $query['name'] = $SubDomain;
             $query['search_mode'] = 'equal';
         }
+        $allowedSort = ['Name' => 'name', 'Type' => 'type', 'UpdateTime' => 'updated_at'];
+        if ($SortField && isset($allowedSort[$SortField])) {
+            $query += [
+                'sort_key' => $allowedSort[$SortField],
+                'sort_dir' => strtolower($SortOrder),
+            ];
+        }
         $data = $this->send_request('GET', '/v2.1/zones/'.$this->domainid.'/recordsets', $query);
         if ($data) {
             $list = [];
             foreach ($data['recordsets'] as $row) {
-                if ($row['name'] == $row['zone_name']) $row['name'] = '@';
-                if ($row['type'] == 'MX') list($row['mx'], $row['records']) = explode(' ', $row['records'][0]);
+                $name = substr($row['name'], 0, -(strlen($row['zone_name']) + 1));
+                if ($name == '') $name = '@';
                 $list[] = [
                     'RecordId' => $row['id'],
                     'Domain' => rtrim($row['zone_name'], '.'),
-                    'Name' => str_replace('.'.$row['zone_name'], '', $row['name']),
+                    'Name' => $name,
                     'Type' => $row['type'],
                     'Value' => $row['records'],
                     'Line' => $row['line'],
@@ -110,12 +117,12 @@ class huawei implements DnsInterface
     {
         $data = $this->send_request('GET', '/v2.1/zones/'.$this->domainid.'/recordsets/'.$RecordId);
         if ($data) {
-            if ($data['name'] == $data['zone_name']) $data['name'] = '@';
-            if ($data['type'] == 'MX') list($data['mx'], $data['records']) = explode(' ', $data['records'][0]);
+            $name = substr($data['name'], 0, -(strlen($data['zone_name']) + 1));
+            if ($name == '') $name = '@';
             return [
                 'RecordId' => $data['id'],
                 'Domain' => rtrim($data['zone_name'], '.'),
-                'Name' => str_replace('.'.$data['zone_name'], '', $data['name']),
+                'Name' => $name,
                 'Type' => $data['type'],
                 'Value' => $data['records'],
                 'Line' => $data['line'],
@@ -137,7 +144,6 @@ class huawei implements DnsInterface
         if ($Type == 'TXT' && substr($Value, 0, 1) != '"') $Value = '"' . $Value . '"';
         $records = array_reverse(explode(',', $Value));
         $params = ['name' => $Name, 'type' => $this->convertType($Type), 'records' => $records, 'line' => $Line, 'ttl' => intval($TTL), 'description' => $Remark];
-        if ($Type == 'MX') $params['records'][0] = intval($MX) . ' ' . $Value;
         if ($Weight > 0) $params['weight'] = intval($Weight);
         $data = $this->send_request('POST', '/v2.1/zones/'.$this->domainid.'/recordsets', null, $params);
         return is_array($data) ? $data['id'] : false;
@@ -150,7 +156,6 @@ class huawei implements DnsInterface
         if ($Type == 'TXT' && substr($Value, 0, 1) != '"') $Value = '"' . $Value . '"';
         $records = array_reverse(explode(',', $Value));
         $params = ['name' => $Name, 'type' => $this->convertType($Type), 'records' => $records, 'line' => $Line, 'ttl' => intval($TTL), 'description' => $Remark];
-        if ($Type == 'MX') $params['records'][0] = intval($MX) . ' ' . $Value;
         if ($Weight > 0) $params['weight'] = intval($Weight);
         $data = $this->send_request('PUT', '/v2.1/zones/'.$this->domainid.'/recordsets/'.$RecordId, null, $params);
         return is_array($data);

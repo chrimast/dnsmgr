@@ -164,3 +164,52 @@ ADD COLUMN `expiretime` datetime DEFAULT NULL,
 ADD COLUMN `checktime` datetime DEFAULT NULL,
 ADD COLUMN `noticetime` datetime DEFAULT NULL,
 ADD COLUMN `checkstatus` tinyint(1) NOT NULL DEFAULT '0';
+
+CREATE TABLE IF NOT EXISTS `dnsmgr_sctask` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `did` int(11) unsigned NOT NULL,
+  `rr` varchar(128) NOT NULL,
+  `recordid` varchar(60) NOT NULL,
+  `type` tinyint(1) NOT NULL DEFAULT 0,
+  `cycle` tinyint(1) NOT NULL DEFAULT 0,
+  `switchtype` tinyint(1) NOT NULL DEFAULT 0,
+  `switchdate` varchar(10) DEFAULT NULL,
+  `switchtime` varchar(20) DEFAULT NULL,
+  `value` varchar(128) DEFAULT NULL,
+  `line` varchar(20) DEFAULT NULL,
+  `addtime` int(11) NOT NULL DEFAULT 0,
+  `updatetime` int(11) NOT NULL DEFAULT 0,
+  `nexttime` int(11) NOT NULL DEFAULT 0,
+  `active` tinyint(1) NOT NULL DEFAULT 0,
+  `recordinfo` varchar(200) DEFAULT NULL,
+  `remark` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `did` (`did`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `dnsmgr_account`
+ADD COLUMN `config` text DEFAULT NULL,
+CHANGE COLUMN `ak` `name` varchar(255) NOT NULL;
+
+CREATE TABLE IF NOT EXISTS `dnsmgr_domain_alias` (
+  `id` int(11) unsigned NOT NULL auto_increment,
+  `did` int(11) unsigned NOT NULL,
+  `name` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `did` (`did`),
+  KEY `name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `dnsmgr_domain_category` (
+  `id` int(11) unsigned NOT NULL auto_increment,
+  `name` varchar(50) NOT NULL,
+  `remark` varchar(100) DEFAULT NULL,
+  `sort` int(11) NOT NULL DEFAULT '0',
+  `addtime` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sort` (`sort`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `dnsmgr_domain`
+ADD COLUMN `cid` int(11) unsigned NOT NULL DEFAULT '0',
+ADD KEY `cid` (`cid`);

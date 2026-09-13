@@ -68,6 +68,10 @@
             <td>CF优选IP更新</td>
             <td><font color="green">{:config_get('optimize_ip_time', '未运行', true)}</font></td>
         </tr>
+        <tr>
+            <td>定时切换解析</td>
+            <td><font color="green">{:config_get('schedule_time', '未运行', true)}</font></td>
+        </tr>
     </tbody>
 </table>
 </div>
@@ -76,7 +80,7 @@
 </div>
 {/block}
 {block name="script"}
-<script src="{$cdnpublic}layer/3.1.1/layer.js"></script>
+<script src="/static/js/layer/layer.js"></script>
 <script>
 var items = $("select[default]");
 for (i = 0; i < items.length; i++) {

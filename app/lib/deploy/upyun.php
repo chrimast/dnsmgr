@@ -31,9 +31,15 @@ class upyun implements DeployInterface
         $this->login();
 
         $url = 'https://console.upyun.com/api/https/certificate/';
+        // 如果是 EC 证书，调整私钥头为 EC PRIVATE KEY
+        $privatekey_send = $privatekey;
+        if ($this->isEcCertificate($fullchain)) {
+            $privatekey_send = str_replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN EC PRIVATE KEY-----', $privatekey_send);
+            $privatekey_send = str_replace('-----END PRIVATE KEY-----', '-----END EC PRIVATE KEY-----', $privatekey_send);
+        }
         $params = [
             'certificate' => $fullchain,
-            'private_key' => $privatekey,
+            'private_key' => $privatekey_send,
         ];
         $response = http_request($url, http_build_query($params), null, $this->cookie, null, $this->proxy);
         $result = json_decode($response['body'], true);
@@ -86,8 +92,11 @@ class upyun implements DeployInterface
             }
         }
 
-        if ($i == 0) throw new Exception('未找到可迁移的证书');
-        $this->log('共迁移' . $i . '个证书,关联域名' . $d . '个');
+        if ($i == 0) {
+            $this->log('未找到可迁移的证书');
+        } else {
+            $this->log('共迁移' . $i . '个证书,关联域名' . $d . '个');
+        }
     }
 
     private function login()
@@ -129,5 +138,23 @@ class upyun implements DeployInterface
         if ($this->logger) {
             call_user_func($this->logger, $txt);
         }
+    }
+
+    /**
+     * 判断是否为 EC (ECDSA) 证书
+     */
+    private function isEcCertificate($fullchain)
+    {
+        // 提取第一个证书
+        if (!preg_match('/-----BEGIN CERTIFICATE-----\s*(.+?)\s*-----END CERTIFICATE-----/s', $fullchain, $m)) {
+            return false;
+        }
+
+        $pubKey = openssl_pkey_get_public($m[0]);
+        if (!$pubKey) return false;
+
+        $details = openssl_pkey_get_details($pubKey);
+
+        return $details && ($details['type'] ?? 0) === OPENSSL_KEYTYPE_EC;
     }
 }

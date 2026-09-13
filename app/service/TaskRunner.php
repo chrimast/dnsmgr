@@ -17,19 +17,32 @@ class TaskRunner
     private function db()
     {
         if (!$this->conn) {
-            $this->conn = NewDb::connect();
+            $this->conn = NewDb::pool();
         }
         return $this->conn;
     }
 
-    private function closeDb()
+    private function closeDb(bool $broken = false)
     {
         if ($this->conn) {
-            $this->conn->close();
+            NewDb::release($this->conn, $broken);
+            $this->conn = null;
         }
     }
 
     public function execute($row)
+    {
+        try {
+            return $this->handle($row);
+        } catch (\Throwable $e) {
+            $this->closeDb(true);
+            throw $e;
+        } finally {
+            $this->closeDb();
+        }
+    }
+
+    private function handle($row)
     {
         if ($row['type'] == 3) { //条件开启解析
             $action = 0;
@@ -71,7 +84,7 @@ class TaskRunner
         }
 
         if ($action > 0) {
-            $drow = $this->db()->name('domain')->alias('A')->join('account B', 'A.aid = B.id')->where('A.id', $row['did'])->field('A.*,B.type,B.ak,B.sk,B.ext')->find();
+            $drow = $this->db()->name('domain')->alias('A')->join('account B', 'A.aid = B.id')->where('A.id', $row['did'])->field('A.*,B.type,B.config')->find();
             if (!$drow) {
                 echo '域名不存在（ID：'.$row['did'].'）'."\n";
                 $this->closeDb();

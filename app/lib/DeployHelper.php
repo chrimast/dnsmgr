@@ -11,7 +11,7 @@ class DeployHelper
             'name' => '宝塔面板',
             'class' => 1,
             'icon' => 'bt.png',
-            'desc' => '支持部署到宝塔面板搭建的站点、Docker、邮局与面板本身',
+            'desc' => '支持部署到宝塔Linux面板&aaPanel搭建的站点',
             'note' => null,
             'inputs' => [
                 'url' => [
@@ -46,6 +46,7 @@ class DeployHelper
                         '3' => 'Docker网站的证书',
                         '2' => '邮局域名的证书',
                         '1' => '面板本身的证书',
+                        '4' => '反向代理的证书',
                     ],
                     'value' => '0',
                     'required' => true,
@@ -54,9 +55,70 @@ class DeployHelper
                     'name' => '网站名称列表',
                     'type' => 'textarea',
                     'placeholder' => '填写要部署证书的网站名称，每行一个',
-                    'note' => 'PHP项目和反代项目填写创建时绑定的第一个域名，Java/Node/Go等其他项目填写项目名称，邮局填写域名',
-                    'show' => 'type==0||type==2||type==3',
+                    'note' => 'PHP项目和反代项目填写创建时绑定的第一个域名，Java/Node/Go等其他项目填写项目名称，邮局和IIS站点填写绑定的域名',
+                    'show' => 'type==0||type==2||type==3||type==4',
                     'required' => true,
+                ],
+            ],
+        ],
+        'btwin' => [
+            'name' => '宝塔Win极速版',
+            'class' => 1,
+            'icon' => 'bt.png',
+            'desc' => '支持部署到宝塔Windows面板极速版',
+            'note' => null,
+            'inputs' => [
+                'url' => [
+                    'name' => '面板地址',
+                    'type' => 'input',
+                    'placeholder' => '宝塔面板地址',
+                    'note' => '填写规则如：http://192.168.1.100:8888 ，不要带其他后缀',
+                    'required' => true,
+                ],
+                'key' => [
+                    'name' => '接口密钥',
+                    'type' => 'input',
+                    'placeholder' => '宝塔面板设置->面板设置->API接口',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'type' => [
+                    'name' => '部署类型',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '网站的证书',
+                        '1' => '面板本身的证书',
+                    ],
+                    'value' => '0',
+                    'required' => true,
+                ],
+                'sites' => [
+                    'name' => '网站名称列表',
+                    'type' => 'textarea',
+                    'placeholder' => '填写要部署证书的网站名称，每行一个',
+                    'note' => '',
+                    'show' => 'type==0',
+                    'required' => true,
+                ],
+                'is_iis' => [
+                    'name' => '是否IIS站点',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'show' => 'type==0',
+                    'value' => '0'
                 ],
             ],
         ],
@@ -139,12 +201,12 @@ class DeployHelper
             'class' => 1,
             'icon' => 'host.png',
             'desc' => '支持虚拟主机与CDN站点',
-            'note' => '以上登录地址需填写Easypanel管理员面板地址，非用户面板。',
+            'note' => '以上登录信息为Easypanel管理员面板的，非用户面板。',
             'inputs' => [
                 'url' => [
                     'name' => '面板地址',
                     'type' => 'input',
-                    'placeholder' => 'Easypanel管理员面板地址',
+                    'placeholder' => 'Easypanel面板地址',
                     'note' => '填写规则如：http://192.168.1.100:3312 ，不要带其他后缀',
                     'required' => true,
                 ],
@@ -234,6 +296,106 @@ class DeployHelper
             ],
             'taskinputs' => [],
         ],
+        'nginxproxymanager' => [
+            'name' => 'Nginx Proxy Manager',
+            'class' => 1,
+            'icon' => 'npm.svg',
+            'desc' => '更新 Nginx Proxy Manager 的自定义证书并自动绑定 Proxy Host',
+            'note' => '填写 Nginx Proxy Manager 面板地址与登录账号密码，系统将通过官方 API 登录并执行证书更新。',
+            'tasknote' => '如填写证书ID则优先更新该自定义证书；留空时系统会根据当前证书订单的域名在 NPM 中匹配 Proxy Host，并在首次成功后自动保存证书ID，后续续期优先走该ID，不再依赖域名匹配。',
+            'inputs' => [
+                'url' => [
+                    'name' => '面板地址',
+                    'type' => 'input',
+                    'placeholder' => 'Nginx Proxy Manager 面板地址',
+                    'note' => '填写规则如：http://192.168.1.100:81 ，不要带 /api 等后缀',
+                    'required' => true,
+                ],
+                'email' => [
+                    'name' => '登录邮箱',
+                    'type' => 'input',
+                    'placeholder' => 'NPM 登录邮箱',
+                    'validator' => 'email',
+                    'required' => true,
+                ],
+                'password' => [
+                    'name' => '登录密码',
+                    'type' => 'input',
+                    'placeholder' => 'NPM 登录密码',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'id' => [
+                    'name' => '证书ID',
+                    'type' => 'input',
+                    'placeholder' => '留空则按域名匹配 Proxy Host 并自动回填',
+                    'note' => '优先级最高。填写后将直接更新该自定义证书ID；仅支持 NPM 中 provider 为 other 的自定义证书。',
+                ],
+                'host_id' => [
+                    'name' => 'Proxy Host ID',
+                    'type' => 'input',
+                    'placeholder' => '可留空，留空则按域名自动匹配',
+                    'note' => '可选。未填写证书ID时，若填写此项则仅处理指定 Proxy Host；若留空则按当前证书订单域名自动查找匹配的 Proxy Host。',
+                ],
+            ],
+        ],
+        'directadmin' => [
+            'name' => 'DirectAdmin',
+            'class' => 1,
+            'icon' => 'directadmin.png',
+            'desc' => '通过 DirectAdmin 官方 API 自动部署域名 SSL 证书',
+            'note' => '使用 HTTPS 和 HTTP Basic Authentication。认证密码可填写 DirectAdmin 账户密码；如服务商开放 Login Key，也可填写 Login Key。',
+            'tasknote' => '填写 DirectAdmin 中已存在的目标域名。多个域名可用换行或逗号分隔；系统会分别调用 CMD_API_SSL 更新证书。',
+            'inputs' => [
+                'url' => [
+                    'name' => '面板地址',
+                    'type' => 'input',
+                    'placeholder' => 'https://server.example.com:2222',
+                    'note' => '必须使用 HTTPS，不要带 CMD_API_SSL 等路径',
+                    'required' => true,
+                ],
+                'username' => [
+                    'name' => '用户名',
+                    'type' => 'input',
+                    'placeholder' => 'DirectAdmin 登录用户名',
+                    'required' => true,
+                ],
+                'password' => [
+                    'name' => '认证密码',
+                    'type' => 'input',
+                    'placeholder' => 'DirectAdmin 账户密码或 Login Key',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0',
+                ],
+            ],
+            'taskinputs' => [
+                'domain' => [
+                    'name' => 'DirectAdmin 域名',
+                    'type' => 'textarea',
+                    'placeholder' => "example.com\nsecond.example",
+                    'note' => '必须是该 DirectAdmin 账户中已存在的域名；多个域名可换行或用逗号分隔。',
+                    'required' => true,
+                ],
+            ],
+        ],
         'btwaf' => [
             'name' => '堡塔云WAF',
             'class' => 1,
@@ -266,11 +428,22 @@ class DeployHelper
                 ],
             ],
             'taskinputs' => [
+                'type' => [
+                    'name' => '部署类型',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '网站的证书',
+                        '1' => '面板本身的证书',
+                    ],
+                    'value' => '0',
+                    'required' => true,
+                ],
                 'sites' => [
                     'name' => '网站名称列表',
                     'type' => 'textarea',
                     'placeholder' => '填写要部署证书的网站名称，每行一个',
                     'required' => true,
+                    'show' => 'type==0',
                 ],
             ],
         ],
@@ -288,17 +461,43 @@ class DeployHelper
                     'note' => '填写示例：http://demo.cdnfly.cn',
                     'required' => true,
                 ],
+                'auth' => [
+                    'name' => '认证方式',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '接口密钥',
+                        '1' => '模拟登录',
+                    ],
+                    'value' => '0',
+                    'required' => true,
+                ],
                 'api_key' => [
                     'name' => 'api_key',
                     'type' => 'input',
                     'placeholder' => '',
                     'required' => true,
+                    'show' => 'auth==0',
                 ],
                 'api_secret' => [
                     'name' => 'api_secret',
                     'type' => 'input',
                     'placeholder' => '',
                     'required' => true,
+                    'show' => 'auth==0',
+                ],
+                'username' => [
+                    'name' => '登录账号',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                    'show' => 'auth==1',
+                ],
+                'password' => [
+                    'name' => '登录密码',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                    'show' => 'auth==1',
                 ],
                 'proxy' => [
                     'name' => '使用代理服务器',
@@ -314,9 +513,8 @@ class DeployHelper
                 'id' => [
                     'name' => '证书ID',
                     'type' => 'input',
-                    'placeholder' => '',
+                    'placeholder' => '留空则为添加证书',
                     'note' => '在网站管理->证书管理查看证书的ID，注意域名是否与证书匹配',
-                    'required' => true,
                 ],
             ],
         ],
@@ -334,17 +532,36 @@ class DeployHelper
                     'note' => '填写示例：http://demo.xxxx.cn',
                     'required' => true,
                 ],
+                'auth' => [
+                    'name' => '认证方式',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '账号密码(旧版)',
+                        '1' => 'API访问令牌',
+                    ],
+                    'value' => '0',
+                    'required' => true,
+                ],
+                'api_key' => [
+                    'name' => 'API访问令牌',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                    'show' => 'auth==1',
+                ],
                 'email' => [
                     'name' => '邮箱地址',
                     'type' => 'input',
                     'placeholder' => '',
                     'required' => true,
+                    'show' => 'auth==0',
                 ],
                 'password' => [
                     'name' => '密码',
                     'type' => 'input',
                     'placeholder' => '',
                     'required' => true,
+                    'show' => 'auth==0',
                 ],
                 'proxy' => [
                     'name' => '使用代理服务器',
@@ -360,9 +577,8 @@ class DeployHelper
                 'id' => [
                     'name' => '证书ID',
                     'type' => 'input',
-                    'placeholder' => '',
+                    'placeholder' => '留空则为添加证书',
                     'note' => '在站点->证书管理查看证书的ID，注意域名是否与证书匹配',
-                    'required' => true,
                 ],
             ],
         ],
@@ -425,13 +641,66 @@ class DeployHelper
             ],
             'taskinputs' => [],
         ],
+        'uusec' => [
+            'name' => '南墙WAF',
+            'class' => 1,
+            'icon' => 'waf.png',
+            'desc' => '',
+            'note' => null,
+            'inputs' => [
+                'url' => [
+                    'name' => '控制台地址',
+                    'type' => 'input',
+                    'placeholder' => '南墙WAF控制台地址',
+                    'note' => '填写规则如：http://192.168.1.100:4443 ，不要带其他后缀',
+                    'required' => true,
+                ],
+                'username' => [
+                    'name' => '用户名',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'password' => [
+                    'name' => '密码',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'id' => [
+                    'name' => '证书ID',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'note' => '在证书管理查看证书的ID，注意域名是否与证书匹配',
+                    'required' => true,
+                ],
+                'name' => [
+                    'name' => '证书名称',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'note' => '在证书管理查看证书的名称',
+                    'required' => true,
+                ],
+            ],
+        ],
         'opanel' => [
             'name' => '1Panel',
             'class' => 1,
             'icon' => 'opanel.png',
             'desc' => '更新面板证书管理内的SSL证书',
             'note' => null,
-            'tasknote' => '系统会根据关联SSL证书的域名，自动更新对应证书',
+            'tasknote' => '',
             'inputs' => [
                 'url' => [
                     'name' => '面板地址',
@@ -453,7 +722,7 @@ class DeployHelper
                         'v1' => '1.x',
                         'v2' => '2.x',
                     ],
-                    'value' => 'v1',
+                    'value' => 'v2',
                     'required' => true,
                 ],
                 'proxy' => [
@@ -466,7 +735,32 @@ class DeployHelper
                     'value' => '0'
                 ],
             ],
-            'taskinputs' => [],
+            'taskinputs' => [
+                'type' => [
+                    'name' => '部署类型',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '更新已有证书',
+                        '3' => '面板本身的证书',
+                    ],
+                    'value' => '0',
+                    'required' => true,
+                ],
+                'id' => [
+                    'name' => '证书ID',
+                    'type' => 'input',
+                    'placeholder' => '在证书列表查看ID',
+                    'note' => '留空为根据关联SSL证书的域名，自动更新对应证书',
+                    'show' => 'type==0',
+                ],
+                'node_name' => [
+                    'name' => '节点名称',
+                    'type' => 'textarea',
+                    'placeholder' => '每行一个子节点名称',
+                    'note' => '不填写时：只更新主节点证书；填写时：同时更新主节点和所有指定的子节点证书。每行填写一个子节点名称',
+                    'show' => 'type==0',
+                ],
+            ],
         ],
         'mwpanel' => [
             'name' => 'MW面板',
@@ -521,6 +815,65 @@ class DeployHelper
                     'type' => 'textarea',
                     'placeholder' => '填写要部署证书的网站名称，每行一个',
                     'note' => '网站名称，即为网站创建时绑定的第一个域名',
+                    'show' => 'type==0',
+                    'required' => true,
+                ],
+            ],
+        ],
+        'acepanel' => [
+            'name' => 'AcePanel',
+            'class' => 1,
+            'icon' => 'acepanel.svg',
+            'desc' => '支持 AcePanel 3.0+ 版本使用',
+            'note' => '支持 AcePanel 3.0+ 版本使用',
+            'inputs' => [
+                'url' => [
+                    'name' => '面板地址',
+                    'type' => 'input',
+                    'placeholder' => 'AcePanel 地址',
+                    'note' => '填写规则如：https://192.168.1.100:8888/xxxxxx ，带访问入口但不要带其他后缀',
+                    'required' => true,
+                ],
+                'id' => [
+                    'name' => '访问令牌ID',
+                    'type' => 'input',
+                    'placeholder' => '1',
+                    'note' => 'AcePanel 设置->用户->访问令牌',
+                    'required' => true,
+                ],
+                'token' => [
+                    'name' => '访问令牌',
+                    'type' => 'input',
+                    'note' => 'AcePanel 设置->用户->访问令牌',
+                    'placeholder' => '32位字符串',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'type' => [
+                    'name' => '部署类型',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => 'AcePanel 网站的证书',
+                        '1' => 'AcePanel 本身的证书',
+                    ],
+                    'value' => '0',
+                    'required' => true,
+                ],
+                'sites' => [
+                    'name' => '网站名称列表',
+                    'type' => 'textarea',
+                    'placeholder' => '填写要部署证书的网站名称，每行一个',
+                    'note' => '填写创建网站时设置的网站唯一名称',
                     'show' => 'type==0',
                     'required' => true,
                 ],
@@ -581,6 +934,94 @@ class DeployHelper
                     'placeholder' => '填写要部署证书的网站名称，每行一个',
                     'note' => '填写创建网站时设置的网站唯一名称',
                     'show' => 'type==0',
+                    'required' => true,
+                ],
+            ],
+        ],
+        'xp' => [
+            'name' => '小皮面板',
+            'class' => 1,
+            'icon' => 'xp.png',
+            'desc' => '',
+            'note' => null,
+            'tasknote' => '',
+            'inputs' => [
+                'url' => [
+                    'name' => '面板地址',
+                    'type' => 'input',
+                    'placeholder' => '小皮面板地址',
+                    'note' => '填写规则如：http://192.168.1.100:8888 ，不要带其他后缀',
+                    'required' => true,
+                ],
+                'apikey' => [
+                    'name' => '接口密钥',
+                    'type' => 'input',
+                    'placeholder' => '设置->OpenAPI接口',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'sites' => [
+                    'name' => '网站名称列表',
+                    'type' => 'textarea',
+                    'placeholder' => '填写要部署证书的网站名称，每行一个',
+                    'note' => '网站名称，即为网站创建时绑定的第一个域名',
+                    'required' => true,
+                ],
+            ],
+        ],
+        'amh' => [
+            'name' => 'AMH面板',
+            'class' => 1,
+            'icon' => 'amh.ico',
+            'desc' => '',
+            'note' => null,
+            'tasknote' => '',
+            'inputs' => [
+                'url' => [
+                    'name' => '面板地址',
+                    'type' => 'input',
+                    'placeholder' => 'AMH面板地址',
+                    'note' => '填写规则如：http://192.168.1.100:8888 ，不要带其他后缀',
+                    'required' => true,
+                ],
+                'apikey' => [
+                    'name' => 'API接口密钥',
+                    'type' => 'input',
+                    'placeholder' => '安装amapi软件后查看，是密钥不是私钥',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'env_name' => [
+                    'name' => '环境名称',
+                    'type' => 'input',
+                    'placeholder' => '如：lnmp01',
+                    'required' => true,
+                ],
+                'vhost_name' => [
+                    'name' => '网站名称列表',
+                    'type' => 'textarea',
+                    'placeholder' => '填写要部署证书的网站标识域名，每行一个',
+                    'note' => '网站标识域名一列的值，并非绑定域名',
                     'required' => true,
                 ],
             ],
@@ -679,6 +1120,47 @@ class DeployHelper
             ],
             'taskinputs' => [],
         ],
+        'fnos' => [
+            'name' => '飞牛OS',
+            'class' => 1,
+            'icon' => 'fnos.png',
+            'desc' => '更新飞牛OS的证书',
+            'note' => '请先配置sudo免密：<br/>
+sudo visudo<br/>
+#在文件最后一行增加以下内容，需要将username替换成自己的用户名<br/>
+username ALL=(ALL) NOPASSWD: NOPASSWD: ALL<br/>
+ctrl+x 保存退出<br/>',
+            'tasknote' => '系统会根据关联SSL证书的域名，自动更新对应证书',
+            'inputs' => [
+                'host' => [
+                    'name' => '主机地址',
+                    'type' => 'input',
+                    'placeholder' => '填写IP地址或域名，需开启SSH功能',
+                    'required' => true,
+                ],
+                'port' => [
+                    'name' => 'SSH端口',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'value' => '22',
+                    'required' => true,
+                ],
+                'username' => [
+                    'name' => '用户名',
+                    'type' => 'input',
+                    'placeholder' => '登录用户名',
+                    'value' => '',
+                    'required' => true,
+                ],
+                'password' => [
+                    'name' => '密码',
+                    'type' => 'input',
+                    'placeholder' => '登录密码',
+                    'required' => true,
+                ],
+            ],
+            'taskinputs' => [],
+        ],
         'proxmox' => [
             'name' => 'Proxmox VE',
             'class' => 1,
@@ -725,6 +1207,56 @@ class DeployHelper
                 ],
             ],
         ],
+        'k8s' => [
+            'name' => 'K8S',
+            'class' => 1,
+            'icon' => 'server.png',
+            'desc' => '部署到K8S集群的Secret和Ingress',
+            'note' => '支持部署到K8S集群的Secret和Ingress',
+            'tasknote' => '',
+            'inputs' => [
+                'name' => [
+                    'name' => '名称',
+                    'type' => 'input',
+                    'placeholder' => '仅用于区分',
+                    'required' => true,
+                ],
+                'kubeconfig' => [
+                    'name' => 'kubeconfig',
+                    'type' => 'textarea',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'namespace' => [
+                    'name' => '命名空间',
+                    'type' => 'input',
+                    'value' => 'default',
+                    'required' => true,
+                ],
+                'secret_name' => [
+                    'name' => 'Secret名称',
+                    'type' => 'input',
+                    'placeholder' => '如果Secret不存在，则自动创建',
+                    'required' => true,
+                ],
+                'ingresses' => [
+                    'name' => 'Ingress名称',
+                    'type' => 'input',
+                    'placeholder' => '多个用英文逗号分隔，可留空，留空则只更新Secret',
+                ],
+            ],
+        ],
         'aliyun' => [
             'name' => '阿里云',
             'class' => 2,
@@ -763,8 +1295,10 @@ class DeployHelper
                         ['value'=>'cdn', 'label'=>'内容分发CDN'],
                         ['value'=>'dcdn', 'label'=>'全站加速DCDN'],
                         ['value'=>'esa', 'label'=>'边缘安全加速ESA'],
+                        ['value'=>'esa_saas', 'label'=>'边缘安全加速ESA SaaS'],
                         ['value'=>'oss', 'label'=>'对象存储OSS'],
                         ['value'=>'waf', 'label'=>'Web应用防火墙3.0'],
+                        ['value'=>'wafres', 'label'=>'Web应用防火墙3.0(云产品接入)'],
                         ['value'=>'waf2', 'label'=>'Web应用防火墙2.0'],
                         ['value'=>'clb', 'label'=>'传统型负载均衡CLB'],
                         ['value'=>'alb', 'label'=>'应用型负载均衡ALB'],
@@ -775,6 +1309,8 @@ class DeployHelper
                         ['value'=>'vod', 'label'=>'视频点播'],
                         ['value'=>'fc', 'label'=>'函数计算3.0'],
                         ['value'=>'fc2', 'label'=>'函数计算2.0'],
+                        ['value'=>'ga', 'label'=>'全球加速'],
+                        ['value'=>'upload', 'label'=>'上传到证书管理'],
                     ],
                     'value' => 'cdn',
                     'required' => true,
@@ -783,7 +1319,14 @@ class DeployHelper
                     'name' => 'ESA站点域名',
                     'type' => 'input',
                     'placeholder' => 'ESA添加的站点主域名',
-                    'show' => 'product==\'esa\'',
+                    'show' => 'product==\'esa\' || product == \'esa_saas\'',
+                    'required' => true,
+                ],
+                'esa_saas_sitename' => [
+                    'name' => 'ESA SAAS站点域名',
+                    'type' => 'input',
+                    'placeholder' => 'ESA SAAS站点域名',
+                    'show' => 'product == \'esa_saas\'',
                     'required' => true,
                 ],
                 'oss_endpoint' => [
@@ -808,7 +1351,7 @@ class DeployHelper
                         ['value'=>'ap-southeast-1', 'label'=>'非中国内地'],
                     ],
                     'value' => 'cn-hangzhou',
-                    'show' => 'product==\'waf\'||product==\'waf2\'||product==\'ddoscoo\'||product==\'esa\'',
+                    'show' => 'product==\'waf\'||product==\'waf2\'||product==\'wafres\'||product==\'ddoscoo\'||product==\'esa\'||product==\'esa_saas\'',
                     'required' => true,
                 ],
                 'regionid' => [
@@ -864,11 +1407,52 @@ class DeployHelper
                     'note' => '进入NLB实例详情->监听列表，复制监听ID（只支持TCPSSL监听协议）',
                     'required' => true,
                 ],
+                'ga_id' => [
+                    'name' => '全球加速实例ID',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'show' => 'product==\'ga\'',
+                    'required' => true,
+                ],
+                'ga_listener_id' => [
+                    'name' => '监听ID',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'show' => 'product==\'ga\'',
+                    'note' => '进入实例详情->监听列表，复制监听ID（只支持HTTPS监听协议）',
+                    'required' => true,
+                ],
+                'waf_resource_id' => [
+                    'name' => '云产品防护对象ID',
+                    'type' => 'input',
+                    'placeholder' => '多个ID可用,隔开',
+                    'show' => 'product==\'wafres\'',
+                    'note' => '进入查看防护对象，对象名称一列即为云产品防护对象ID',
+                    'required' => true,
+                ],
+                'deploy_type' => [
+                    'name' => '部署证书类型',
+                    'type' => 'select',
+                    'options' => [
+                        ['value'=>'0', 'label'=>'默认证书'],
+                        ['value'=>'1', 'label'=>'扩展证书'],
+                    ],
+                    'value' => '0',
+                    'show' => 'product==\'clb\'||product==\'alb\'||product==\'nlb\'||product==\'ga\'||product==\'wafres\'',
+                    'required' => true,
+                ],
+                'clb_domain' => [
+                    'name' => '扩展域名',
+                    'type' => 'input',
+                    'placeholder' => '多个域名可使用,分隔',
+                    'show' => 'product==\'clb\'&&deploy_type==1||product==\'ga\'&&deploy_type==1',
+                    'required' => true,
+                ],
                 'domain' => [
                     'name' => '绑定的域名',
                     'type' => 'input',
-                    'placeholder' => '',
-                    'show' => 'product!=\'esa\'&&product!=\'clb\'&&product!=\'alb\'&&product!=\'nlb\'',
+                    'placeholder' => '多个域名可用,隔开',
+                    'show' => 'product!=\'esa\'&&product!=\'esa_saas\'&&product!=\'clb\'&&product!=\'alb\'&&product!=\'nlb\'&&product!=\'ga\'&&product!=\'upload\'&&product!=\'wafres\'',
                     'required' => true,
                 ],
             ],
@@ -921,6 +1505,9 @@ class DeployHelper
                         ['value'=>'tse', 'label'=>'云原生API网关TSE'],
                         ['value'=>'tcb', 'label'=>'云开发TCB'],
                         ['value'=>'lighthouse', 'label'=>'轻量应用服务器'],
+                        ['value'=>'upload', 'label'=>'上传到证书管理'],
+                        ['value'=>'update', 'label'=>'更新证书内容（证书ID不变）'],
+                        ['value'=>'update_new', 'label'=>'更新证书内容（生成新的ID）'],
                     ],
                     'value' => 'cdn',
                     'required' => true,
@@ -1020,9 +1607,23 @@ class DeployHelper
                     'name' => '绑定的域名',
                     'type' => 'input',
                     'placeholder' => '',
-                    'show' => 'product!=\'clb\'&&product!=\'tke\'',
+                    'show' => 'product!=\'clb\'&&product!=\'tke\'&&product!=\'upload\'&&product!=\'update\'&&product!=\'update_new\'',
                     'note' => 'CDN、EO、WAF多个域名可用,隔开，其他只能填写1个域名',
                     'required' => true,
+                ],
+                'cert_id' => [
+                    'name' => '证书ID',
+                    'type' => 'input',
+                    'placeholder' => '要更新的证书ID，在我的证书列表查看',
+                    'show' => 'product==\'update\'||product==\'update_new\'',
+                    'required' => true,
+                    'note' => '如果使用证书ID不变接口更新，则需联系加白使用',
+                ],
+                'delete_old_cert' => [
+                    'name' => '更新成功后删除旧证书',
+                    'type' => 'checkbox',
+                    'value' => false,
+                    'show' => 'product==\'update_new\'',
                 ],
             ],
         ],
@@ -1063,15 +1664,31 @@ class DeployHelper
                         ['value'=>'cdn', 'label'=>'内容分发网络CDN'],
                         ['value'=>'elb', 'label'=>'弹性负载均衡ELB'],
                         ['value'=>'waf', 'label'=>'Web应用防火墙WAF'],
+                        ['value'=>'obs', 'label'=>'对象存储服务OBS'],
+                        ['value'=>'upload', 'label'=>'上传到证书管理'],
                     ],
                     'value' => 'cdn',
+                    'required' => true,
+                ],
+                'obs_endpoint' => [
+                    'name' => 'Endpoint地址',
+                    'type' => 'input',
+                    'placeholder' => '填写示例：obs.cn-north-4.myhuaweicloud.com',
+                    'show' => 'product==\'obs\'',
+                    'required' => true,
+                ],
+                'obs_bucket' => [
+                    'name' => '桶名称',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'show' => 'product==\'obs\'',
                     'required' => true,
                 ],
                 'domain' => [
                     'name' => '绑定的域名',
                     'type' => 'input',
                     'placeholder' => '多个域名可使用,分隔',
-                    'show' => 'product==\'cdn\'',
+                    'show' => 'product==\'cdn\'||product==\'obs\'',
                     'required' => true,
                 ],
                 'project_id' => [
@@ -1166,6 +1783,7 @@ class DeployHelper
                         ['value'=>'cdn', 'label'=>'CDN'],
                         ['value'=>'oss', 'label'=>'OSS'],
                         ['value'=>'pili', 'label'=>'视频直播'],
+                        ['value'=>'upload', 'label'=>'上传到证书管理'],
                     ],
                     'value' => 'cdn',
                     'required' => true,
@@ -1181,6 +1799,7 @@ class DeployHelper
                     'name' => '绑定的域名',
                     'type' => 'input',
                     'placeholder' => '多个域名可使用,分隔',
+                    'show' => 'product!=\'upload\'',
                     'required' => true,
                 ],
             ],
@@ -1223,6 +1842,37 @@ class DeployHelper
                 ],
             ],
         ],
+        'axisnow' => [
+            'name' => 'AxisNow',
+            'class' => 2,
+            'icon' => 'axisnow.png',
+            'desc' => '支持上传证书到AxisNow平台',
+            'note' => '支持上传证书到AxisNow平台',
+            'inputs' => [
+                'name' => [
+                    'name' => '租户名',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'token' => [
+                    'name' => 'API 令牌',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [],
+        ],
         'upyun' => [
             'name' => '又拍云',
             'class' => 2,
@@ -1258,8 +1908,8 @@ class DeployHelper
             'name' => '百度云',
             'class' => 2,
             'icon' => 'baidu.ico',
-            'desc' => '支持部署到百度云CDN',
-            'note' => '支持部署到百度云CDN',
+            'desc' => '支持部署到百度云CDN、BLB',
+            'note' => '支持部署到百度云CDN、BLB',
             'inputs' => [
                 'AccessKeyId' => [
                     'name' => 'AccessKeyId',
@@ -1284,10 +1934,103 @@ class DeployHelper
                 ],
             ],
             'taskinputs' => [
+                'product' => [
+                    'name' => '要部署的产品',
+                    'type' => 'select',
+                    'options' => [
+                        ['value'=>'cdn', 'label'=>'CDN'],
+                        ['value'=>'blb', 'label'=>'普通型BLB'],
+                        ['value'=>'appblb', 'label'=>'应用型BLB'],
+                        ['value'=>'upload', 'label'=>'上传到证书管理'],
+                    ],
+                    'value' => 'cdn',
+                    'required' => true,
+                ],
                 'domain' => [
                     'name' => '绑定的域名',
                     'type' => 'input',
+                    'placeholder' => '多个域名可使用,分隔',
+                    'show' => 'product==\'cdn\'',
+                    'required' => true,
+                ],
+                'region' => [
+                    'name' => '所属地域',
+                    'type' => 'select',
+                    'options' => [
+                        ['value'=>'bj', 'label'=>'北京'],
+                        ['value'=>'gz', 'label'=>'广州'],
+                        ['value'=>'su', 'label'=>'苏州'],
+                        ['value'=>'hkg', 'label'=>'香港'],
+                        ['value'=>'fwh', 'label'=>'武汉'],
+                        ['value'=>'bd', 'label'=>'保定'],
+                        ['value'=>'fsh', 'label'=>'上海'],
+                        ['value'=>'sin', 'label'=>'新加坡'],
+                    ],
+                    'value' => 'bj',
+                    'show' => 'product==\'blb\'||product==\'appblb\'',
+                    'required' => true,
+                ],
+                'blb_id' => [
+                    'name' => '负载均衡实例ID',
+                    'type' => 'input',
                     'placeholder' => '',
+                    'show' => 'product==\'blb\'||product==\'appblb\'',
+                    'required' => true,
+                ],
+                'blb_port' => [
+                    'name' => 'HTTPS监听端口',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'value' => '443',
+                    'show' => 'product==\'blb\'||product==\'appblb\'',
+                    'required' => true,
+                ],
+            ],
+        ],
+        'ksyun' => [
+            'name' => '金山云',
+            'class' => 2,
+            'icon' => 'ksyun.ico',
+            'desc' => '支持部署到金山云CDN',
+            'note' => '支持部署到金山云CDN',
+            'inputs' => [
+                'AccessKeyId' => [
+                    'name' => 'AccessKeyId',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'SecretAccessKey' => [
+                    'name' => 'SecretAccessKey',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'product' => [
+                    'name' => '要部署的产品',
+                    'type' => 'select',
+                    'options' => [
+                        ['value'=>'cdn', 'label'=>'CDN'],
+                    ],
+                    'value' => 'cdn',
+                    'required' => true,
+                ],
+                'domain' => [
+                    'name' => '绑定的域名',
+                    'type' => 'input',
+                    'placeholder' => '多个域名可使用,分隔',
+                    'show' => 'product==\'cdn\'',
                     'required' => true,
                 ],
             ],
@@ -1296,8 +2039,8 @@ class DeployHelper
             'name' => '火山引擎',
             'class' => 2,
             'icon' => 'huoshan.ico',
-            'desc' => '支持部署到火山引擎CDN',
-            'note' => '支持部署到火山引擎CDN',
+            'desc' => '支持部署到火山引擎CDN、CLB、TOS、直播、veImageX',
+            'note' => '支持部署到火山引擎CDN、CLB、TOS、直播、veImageX',
             'inputs' => [
                 'AccessKeyId' => [
                     'name' => 'AccessKeyId',
@@ -1332,7 +2075,9 @@ class DeployHelper
                         ['value'=>'alb', 'label'=>'应用型负载均衡ALB'],
                         ['value'=>'tos', 'label'=>'对象存储TOS'],
                         ['value'=>'live', 'label'=>'视频直播'],
+                        ['value'=>'vod', 'label'=>'视频点播'],
                         ['value'=>'imagex', 'label'=>'veImageX'],
+                        ['value'=>'upload', 'label'=>'上传到证书管理'],
                     ],
                     'value' => 'cdn',
                     'required' => true,
@@ -1344,11 +2089,28 @@ class DeployHelper
                     'show' => 'product==\'tos\'',
                     'required' => true,
                 ],
+                'vod_space_name' => [
+                    'name' => '点播空间名称',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'show' => 'product==\'vod\'',
+                    'required' => true,
+                ],
+                'vod_domain_type' => [
+                    'name' => '点播域名类型',
+                    'type' => 'select',
+                    'options' => [
+                        ['value'=>'play', 'label'=>'点播加速域名和自定义源站加速域名'],
+                        ['value'=>'image', 'label'=>'封面加速域名'],
+                    ],
+                    'show' => 'product==\'vod\'',
+                    'required' => true,
+                ],
                 'domain' => [
                     'name' => '绑定的域名',
                     'type' => 'input',
                     'placeholder' => '多个域名可使用,分隔',
-                    'show' => 'product!=\'clb\'&&product!=\'alb\'',
+                    'show' => 'product!=\'clb\'&&product!=\'alb\'&&product!=\'upload\'',
                     'required' => true,
                 ],
                 'listener_id' => [
@@ -1357,6 +2119,12 @@ class DeployHelper
                     'placeholder' => '',
                     'show' => 'product==\'clb\'||product==\'alb\'',
                     'required' => true,
+                ],
+                'project_name' => [
+                    'name' => '证书上传项目名称',
+                    'type' => 'input',
+                    'placeholder' => '证书实例所属的火山引擎项目名称。如果不设置该参数，证书实例会属于default项目。',
+                    'required' => false,
                 ],
             ],
         ],
@@ -1439,6 +2207,7 @@ class DeployHelper
                     'options' => [
                         ['value'=>'cdn', 'label'=>'CDN'],
                         ['value'=>'cdnpro', 'label'=>'CDN Pro'],
+                        ['value'=>'cdnpro_certificate', 'label'=>'CDN Pro证书管理'],
                         ['value'=>'certificate', 'label'=>'证书管理']
                     ],
                     'value' => 'cdn',
@@ -1461,7 +2230,7 @@ class DeployHelper
                 'cert_id' => [
                     'name' => '证书ID',
                     'type' => 'input',
-                    'show' => 'product==\'certificate\'',
+                    'show' => 'product==\'certificate\'||product==\'cdnpro_certificate\'',
                     'placeholder' => '',
                     'required' => true,
                 ],
@@ -1544,14 +2313,26 @@ class DeployHelper
                         ['value'=>'cdn', 'label'=>'CDN加速'],
                         ['value'=>'icdn', 'label'=>'全站加速'],
                         ['value'=>'accessone', 'label'=>'边缘安全加速平台'],
+                        ['value'=>'cf', 'label'=>'函数计算'],
                     ],
                     'value' => 'cdn',
+                    'required' => true,
+                ],
+                'region_id' => [
+                    'name' => '所属地域',
+                    'type' => 'select',
+                    'options' => [
+                        ['value'=>'bb9fdb42056f11eda1610242ac110002', 'label'=>'华东1'],
+                        ['value'=>'200000002368', 'label'=>'西南1'],
+                    ],
+                    'value' => 'bb9fdb42056f11eda1610242ac110002',
+                    'show' => 'product==\'cf\'',
                     'required' => true,
                 ],
                 'domain' => [
                     'name' => '绑定的域名',
                     'type' => 'input',
-                    'placeholder' => '',
+                    'placeholder' => '多个域名可使用,分隔',
                     'required' => true,
                 ],
             ],
@@ -1630,8 +2411,62 @@ class DeployHelper
                 'id' => [
                     'name' => '证书ID',
                     'type' => 'input',
-                    'placeholder' => '',
+                    'placeholder' => '留空则为添加证书',
                     'note' => '在SSL证书->我的证书页面查看，注意域名是否与证书匹配',
+                ],
+            ],
+        ],
+        'unicloud' => [
+            'name' => 'uniCloud',
+            'class' => 2,
+            'icon' => 'unicloud.png',
+            'desc' => '部署到uniCloud服务空间',
+            'note' => null,
+            'inputs' => [
+                'username' => [
+                    'name' => '账号',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'password' => [
+                    'name' => '密码',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'spaceId' => [
+                    'name' => '服务空间ID',
+                    'type' => 'input',
+                    'placeholder' => 'spaceId',
+                    'required' => true,
+                ],
+                'provider' => [
+                    'name' => '空间提供商',
+                    'type' => 'select',
+                    'options' => [
+                        ['value'=>'aliyun', 'label'=>'阿里云'],
+                        ['value'=>'tencent', 'label'=>'腾讯云'],
+                        ['value'=>'alipay', 'label'=>'支付宝云'],
+                    ],
+                    'value' => 'aliyun',
+                    'required' => true,
+                ],
+                'domains' => [
+                    'name' => '空间域名',
+                    'type' => 'input',
+                    'placeholder' => '多个域名可使用,分隔',
                     'required' => true,
                 ],
             ],
@@ -1823,6 +2658,12 @@ class DeployHelper
                     'required' => true,
                     'show' => 'auth==1',
                 ],
+                'passphrase' => [
+                    'name' => '私钥密码',
+                    'type' => 'input',
+                    'placeholder' => '若私钥有设置密码，请填写此项',
+                    'show' => 'auth==1',
+                ],
                 'windows' => [
                     'name' => '是否Windows',
                     'type' => 'radio',
@@ -1988,6 +2829,73 @@ class DeployHelper
                 ],
             ],
         ],
+        's3storage' => [
+            'name' => 'S3存储',
+            'class' => 3,
+            'icon' => 'cloud.png',
+            'desc' => '支持将证书上传到S3兼容存储（AWS S3、MinIO等）',
+            'note' => '支持AWS S3、MinIO、阿里云OSS（S3兼容模式）等S3协议兼容的对象存储服务',
+            'tasknote' => '证书和私钥将以PEM格式上传到指定的存储桶路径',
+            'inputs' => [
+                'AccessKeyId' => [
+                    'name' => 'AccessKeyId',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'SecretAccessKey' => [
+                    'name' => 'SecretAccessKey',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'endpoint' => [
+                    'name' => 'S3 Endpoint',
+                    'type' => 'input',
+                    'placeholder' => '如：s3.amazonaws.com 或 minio.example.com:9000',
+                    'note' => 'AWS S3填写s3.区域.amazonaws.com，其他S3兼容服务填写对应地址',
+                    'required' => true,
+                ],
+                'region' => [
+                    'name' => '区域',
+                    'type' => 'input',
+                    'placeholder' => '如：us-east-1',
+                    'value' => 'us-east-1',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [
+                'bucket' => [
+                    'name' => '存储桶名称',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'cert_path' => [
+                    'name' => '证书保存路径',
+                    'type' => 'input',
+                    'placeholder' => 'ssl/cert.pem',
+                    'note' => '在存储桶内的文件路径，如 ssl/domain.com/cert.pem',
+                    'required' => true,
+                ],
+                'key_path' => [
+                    'name' => '私钥保存路径',
+                    'type' => 'input',
+                    'placeholder' => 'ssl/key.pem',
+                    'note' => '在存储桶内的文件路径，如 ssl/domain.com/key.pem',
+                    'required' => true,
+                ],
+            ],
+        ],
         'local' => [
             'name' => '复制到本机',
             'class' => 3,
@@ -2085,6 +2993,7 @@ class DeployHelper
         $class = "\\app\\lib\\deploy\\{$type}";
         if (class_exists($class)) {
             $config = json_decode($account['config'], true);
+            if (!is_array($config)) $config = [];
             $model = new $class($config);
             return $model;
         }

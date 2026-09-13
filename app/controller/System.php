@@ -10,6 +10,7 @@ use think\facade\Cache;
 use app\service\OptimizeService;
 use app\service\CertTaskService;
 use app\service\ExpireNoticeService;
+use app\service\ScheduleService;
 
 class System extends BaseController
 {
@@ -91,14 +92,29 @@ class System extends BaseController
         }
     }
 
+    public function customwebhooktest()
+    {
+        if (!checkPermission(2)) return $this->alert('error', '无权限');
+        $custom_webhook_url = config_get('custom_webhook_url');
+        if (empty($custom_webhook_url)) return json(['code' => -1, 'msg' => '请先保存设置']);
+        $content = "这是一封测试消息！\n来自：" . $this->request->root(true);
+        $result = \app\utils\MsgNotice::send_custom_webhook('消息发送测试', $content);
+        if ($result === true) {
+            return json(['code' => 0, 'msg' => '消息发送成功！']);
+        } else {
+            return json(['code' => -1, 'msg' => '消息发送失败！' . $result]);
+        }
+    }
+
     public function proxytest()
     {
         if (!checkPermission(2)) return $this->alert('error', '无权限');
-        $proxy_server = trim($_POST['proxy_server']);
-        $proxy_port = $_POST['proxy_port'];
-        $proxy_user = trim($_POST['proxy_user']);
-        $proxy_pwd = trim($_POST['proxy_pwd']);
-        $proxy_type = $_POST['proxy_type'];
+        $proxy_server = input('post.proxy_server', '', 'trim');
+        $proxy_port = input('post.proxy_port/d', 0);
+        $proxy_user = input('post.proxy_user', '', 'trim');
+        $proxy_pwd = input('post.proxy_pwd', '', 'trim');
+        $proxy_type = input('post.proxy_type', 'http', 'trim');
+        
         try {
             check_proxy('https://dl.amh.sh/ip.htm', $proxy_server, $proxy_port, $proxy_type, $proxy_user, $proxy_pwd);
         } catch (Exception $e) {
@@ -137,6 +153,7 @@ class System extends BaseController
         if (config_get('cron_type', '0') != '1' || empty($cron_key)) exit('未开启当前方式');
         if ($key != $cron_key) exit('访问密钥错误');
 
+        (new ScheduleService())->execute();
         $res = (new OptimizeService())->execute();
         if (!$res) {
             (new CertTaskService())->execute();

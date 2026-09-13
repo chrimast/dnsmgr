@@ -1,7 +1,7 @@
 {extend name="common/layout" /}
 {block name="title"}域名管理{/block}
 {block name="main"}
-<link href="{$cdnpublic}bootstrap-datetimepicker/4.17.47/css/bootstrap-datetimepicker.min.css" rel="stylesheet">
+<link href="/static/css/bootstrap-datetimepicker-4.17.47.min.css" rel="stylesheet">
 <div class="modal" id="modal-store" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true" data-backdrop="static">
 	<div class="modal-dialog">
 		<div class="modal-content animated flipInX">
@@ -107,12 +107,23 @@
 						</div>
 					</div>
 					<div class="form-group">
-						<label class="col-sm-3 control-label no-padding-right">备注</label>
-						<div class="col-sm-9">
-							<input type="text" class="form-control" name="remark" placeholder="">
-						</div>
+					<label class="col-sm-3 control-label">所属分类</label>
+					<div class="col-sm-9">
+						<select name="cid" class="form-control">
+							<option value="0">未分类</option>
+							{foreach $categorys as $item}
+							<option value="{$item.id}">{$item.name}</option>
+							{/foreach}
+						</select>
 					</div>
-				</form>
+				</div>
+				<div class="form-group">
+					<label class="col-sm-3 control-label no-padding-right">备注</label>
+					<div class="col-sm-9">
+						<input type="text" class="form-control" name="remark" placeholder="">
+					</div>
+				</div>
+			</form>
 			</div>
 			<div class="modal-footer">
 				<button type="button" class="btn btn-white" data-dismiss="modal">关闭</button>
@@ -127,6 +138,8 @@
 	<div class="panel-body">
 	
 <form onsubmit="return searchSubmit()" method="GET" class="form-inline" id="searchToolbar">
+	<input type="hidden" name="id" value="">
+	<input type="hidden" name="aid" value="">
   <div class="form-group">
 	<label>搜索</label>
     <input type="text" class="form-control" name="kw" placeholder="域名或备注">
@@ -137,14 +150,17 @@
 	{/foreach}</select>
   </div>
   <div class="form-group">
+	<select name="cid" class="form-control"><option value="">所有分类</option>{foreach $categorys as $item}<option value="{$item.id}">{$item.name}</option>{/foreach}</select>
+  </div>
+  <div class="form-group">
 	<select name="status" class="form-control"><option value="">所有状态</option><option value="1">即将到期</option><option value="2">已到期</option></select>
   </div>
   <button type="submit" class="btn btn-primary"><i class="fa fa-search"></i> 搜索</button>
   <a href="javascript:searchClear()" class="btn btn-default" title="刷新域名列表"><i class="fa fa-refresh"></i> 刷新</a>
-  {if request()->user['level'] eq 2}<a href="javascript:addframe()" class="btn btn-success"><i class="fa fa-plus"></i> 添加</a>
+  {if $user['level'] eq 2}<a href="javascript:addframe()" class="btn btn-success"><i class="fa fa-plus"></i> 添加</a>
   <div class="btn-group" role="group">
 	<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">批量操作 <span class="caret"></span></button>
-	<ul class="dropdown-menu"><li><a href="/domain/add">添加域名</a></li><li><a href="javascript:operation('editremark')">修改域名备注</a></li><li><a href="javascript:operation('opennotice')">开启到期提醒</a></li><li><a href="javascript:operation('closenotice')">关闭到期提醒</a></li><li><a href="javascript:operation('delete')">删除域名</a></li><li role="separator" class="divider"></li><li><a href="javascript:operation('addrecord')">添加解析</a></li><li><a href="javascript:operation('editrecord')">修改解析</a></li></ul>
+	<ul class="dropdown-menu"><li><a href="/domain/add">添加域名</a></li><li><a href="javascript:operation('setcategory')">设置分类</a></li><li><a href="javascript:operation('editremark')">修改域名备注</a></li><li><a href="javascript:operation('opennotice')">开启到期提醒</a></li><li><a href="javascript:operation('closenotice')">关闭到期提醒</a></li><li><a href="javascript:operation('updateexpire')">刷新到期时间</a></li><li><a href="javascript:copySelected()">复制到剪贴板</a></li><li><a href="javascript:operation('delete')">删除域名</a></li><li role="separator" class="divider"></li><li><a href="javascript:operation('addrecord')">添加解析</a></li><li><a href="javascript:operation('editrecord')">修改解析</a></li><li><a href="/record/search">按记录值搜索</a></li><li><a href="/record/smartparse">智能添加解析</a></li></ul>
   </div>
   <a href="/domain/expirenotice" class="btn btn-default">到期提醒设置</a>{/if}
 </form>
@@ -157,22 +173,24 @@
 </div>
 {/block}
 {block name="script"}
-<script src="{$cdnpublic}moment.js/2.29.4/moment.min.js"></script>
-<script src="{$cdnpublic}moment.js/2.29.4/locale/zh-cn.js"></script>
-<script src="{$cdnpublic}bootstrap-datetimepicker/4.17.47/js/bootstrap-datetimepicker.min.js"></script>
-<script src="{$cdnpublic}layer/3.1.1/layer.js"></script>
-<script src="{$cdnpublic}bootstrap-table/1.21.4/bootstrap-table.min.js"></script>
-<script src="{$cdnpublic}bootstrap-table/1.21.4/extensions/page-jump-to/bootstrap-table-page-jump-to.min.js"></script>
-<script src="{$cdnpublic}select2/4.0.13/js/select2.min.js"></script>
-<script src="{$cdnpublic}select2/4.0.13/js/i18n/zh-CN.min.js"></script>
-<script src="/static/js/custom.js"></script>
+<script src="/static/js/moment-2.29.4.min.js"></script>
+<script src="/static/js/moment-2.29.4-locale-zh-cn.js"></script>
+<script src="/static/js/bootstrap-datetimepicker-4.17.47.min.js"></script>
+<script src="/static/js/layer/layer.js"></script>
+<script src="/static/js/bootstrap-table-1.21.4.min.js"></script>
+<script src="/static/js/bootstrap-table-page-jump-to-1.21.4.min.js"></script>
+<script src="/static/js/select2-4.0.13.min.js"></script>
+<script src="/static/js/select2-i18n-zh-CN-4.0.13.min.js"></script>
+<script src="/static/js/custom.js?v=1006"></script>
 <script>
-var userLevel = "{:request()->user['level']}";
+var userLevel = "{$user['level']|default=''}";
 $(document).ready(function(){
 	updateToolbar();
-	const defaultPageSize = getCookie('domain_pagesize') ? getCookie('domain_pagesize') : 15;
+	const pageSizeKey = 'domain_pagesize';
 	const pageNumber = typeof window.$_GET['pageNumber'] != 'undefined' ? parseInt(window.$_GET['pageNumber']) : 1;
-	const pageSize = typeof window.$_GET['pageSize'] != 'undefined' ? parseInt(window.$_GET['pageSize']) : defaultPageSize;
+	const pageSize = getStoredPageSize(pageSizeKey);
+	var urlSort = typeof window.$_GET['sortName'] != 'undefined' ? window.$_GET['sortName'] : undefined;
+	var urlOrder = typeof window.$_GET['sortOrder'] != 'undefined' ? window.$_GET['sortOrder'] : undefined;
 
 	$("#listTable").bootstrapTable({
 		url: '/domain/data',
@@ -180,6 +198,9 @@ $(document).ready(function(){
 		pageSize: pageSize,
 		classes: 'table table-striped table-hover table-bordered',
 		uniqueId: 'id',
+		sortReset: false,
+		sortName: urlSort,
+		sortOrder: urlOrder,
 		columns: [
 			{
 				field: '',
@@ -187,33 +208,39 @@ $(document).ready(function(){
 			},
 			{
 				field: 'id',
-				title: 'ID'
+				title: 'ID',
+				sortable: true
 			},
 			{
 				field: 'typename',
 				title: '平台账户',
+				sortable: true,
 				formatter: function(value, row, index) {
-					return '<img src="/static/images/'+row.type+'.ico" class="type-logo"></img>'+(row.aremark?row.aremark:value+'('+row.aid+')');
+					return '<img src="/static/images/'+row.icon+'" class="type-logo"></img>'+(row.aremark?row.aremark:value+'('+row.aid+')');
 				}
 			},
             {
 				field: 'name',
 				title: '域名',
+				sortable: true,
 				formatter: function(value, row, index) {
 					return '<a href="/record/'+row.id+'" title="进入解析记录管理" onclick="loading()">'+value+'</a>';
 				}
 			},
 			{
 				field: 'recordcount',
-				title: '记录数'
+				title: '记录数',
+				sortable: true
 			},
 			{
 				field: 'addtime',
-				title: '添加时间'
+				title: '添加时间',
+				sortable: true
 			},
 			{
 				field: 'regtime',
 				title: '注册时间',
+				sortable: true,
 				visible: false,
 				formatter: function(value, row, index) {
 					var html = '';
@@ -232,6 +259,7 @@ $(document).ready(function(){
 			{
 				field: 'expiretime',
 				title: '到期时间',
+				sortable: true,
 				formatter: function(value, row, index) {
 					var html = '';
 					if(value == null) {
@@ -259,6 +287,7 @@ $(document).ready(function(){
 			{
 				field: 'is_notice',
 				title: '到期提醒',
+				sortable: true,
 				formatter: function(value, row, index) {
 					return value==1?'<font color="green">是</font>':'<font color="blue">否</font>';
 				}
@@ -266,6 +295,7 @@ $(document).ready(function(){
 			{
 				field: 'is_hide',
 				title: '是否隐藏',
+				sortable: true,
 				visible: false,
 				formatter: function(value, row, index) {
 					return value==1?'<font color="grey">是</font>':'<font color="blue">否</font>';
@@ -274,14 +304,24 @@ $(document).ready(function(){
 			{
 				field: 'is_sso',
 				title: '对接开关',
+				sortable: true,
 				visible: false,
 				formatter: function(value, row, index) {
 					return value==1?'<font color="green">是</font>':'<font color="red">否</font>';
 				}
 			},
 			{
+				field: 'category_name',
+				title: '分类',
+				sortable: true,
+				formatter: function(value, row, index) {
+					return value ? '<span class="label label-default">' + value + '</span>' : '-';
+				}
+			},
+			{
 				field: 'remark',
-				title: '备注'
+				title: '备注',
+				sortable: true
 			},
 			{
 				field: 'action',
@@ -300,10 +340,7 @@ $(document).ready(function(){
 			$('[data-toggle="tooltip"]').tooltip()
 		},
 		onPageChange: function(number, size){
-			if(size != defaultPageSize){
-				defaultPageSize = size;
-				setCookie('domain_pagesize', size);
-			}
+			setStoredPageSize(pageSizeKey, size);
 		},
 	})
 
@@ -396,6 +433,7 @@ function editframe(id){
 	$("#form-store2 select[name=is_hide]").val(row.is_hide);
 	$("#form-store2 select[name=is_sso]").val(row.is_sso);
 	$("#form-store2 select[name=is_notice]").val(row.is_notice);
+	$("#form-store2 select[name=cid]").val(row.cid ? row.cid : 0);
 	$("#form-store2 input[name=remark]").val(row.remark);
 
 	$("#form-store2 input[name=expiretime]").datetimepicker({
@@ -424,9 +462,7 @@ function saveEdit(){
 	});
 }
 function delItem(id) {
-	var confirmobj = layer.confirm('确定要删除此域名吗？删除域名不会影响已添加的解析', {
-	  btn: ['确定','取消']
-	}, function(){
+	layer.confirm('确定要删除此域名吗？删除域名不会影响已添加的解析', {title: '提示', icon: 0}, function(){
 	  var ii = layer.load(2);
 	  $.ajax({
 		type : 'POST',
@@ -443,8 +479,6 @@ function delItem(id) {
 			}
 		}
 	  });
-	}, function(){
-		layer.close(confirmobj);
 	});
 }
 function getDomainList(){
@@ -491,6 +525,25 @@ function getDomainList(){
 		cache:false
 	});
 }
+function copySelected(){
+	var rows = $("#listTable").bootstrapTable('getSelections');
+	if(rows.length == 0){
+		layer.msg('请先选择要复制的域名');
+		return;
+	}
+	var text = rows.map(function(item){
+		return item.name;
+	}).join('\n');
+	var tempInput = document.createElement('textarea');
+	tempInput.style.position = 'absolute';
+	tempInput.style.left = '-9999px';
+	tempInput.value = text;
+	document.body.appendChild(tempInput);
+	tempInput.select();
+	document.execCommand('copy');
+	document.body.removeChild(tempInput);
+	layer.msg('已复制'+rows.length+'个域名到剪贴板', {icon: 1, time: 800});
+}
 function operation(action){
 	var rows = $("#listTable").bootstrapTable('getSelections');
 	if(rows.length == 0){
@@ -504,6 +557,9 @@ function operation(action){
 	if(action == 'editremark'){
 		batch_edit_remark(ids)
 		return;
+	}else if(action == 'setcategory'){
+		batch_set_category(ids)
+		return;
 	}else if(action == 'addrecord'){
 		sessionStorage.setItem('domains', JSON.stringify(rows));
 		window.location.href = '/record/batchadd';
@@ -513,9 +569,7 @@ function operation(action){
 		window.location.href = '/record/batchedit';
 		return;
 	}else if(action == 'delete'){
-		var confirmobj = layer.confirm('确定要删除所选域名吗？', {
-			btn: ['确定','取消']
-		}, function(){
+		layer.confirm('确定要删除所选域名吗？', {title: '提示', icon: 0}, function(){
 			var ii = layer.load(2);
 			$.ajax({
 				type : 'POST',
@@ -533,8 +587,26 @@ function operation(action){
 					}
 				}
 			});
-		}, function(){
-			layer.close(confirmobj);
+		});
+	}else if(action == 'updateexpire'){
+		layer.confirm('提交后将异步刷新所选域名的到期时间', {title: '提示', icon: 0}, function(){
+			var ii = layer.load(2);
+			$.ajax({
+				type : 'POST',
+				url : '/domain/op/act/updateexpire',
+				data : {ids: ids},
+				dataType : 'json',
+				success : function(data) {
+					layer.close(ii);
+					if(data.code == 0){
+						layer.closeAll();
+						layer.alert(data.msg, {icon: 1});
+						searchRefresh();
+					}else{
+						layer.alert(data.msg, {icon: 2});
+					}
+				}
+			});
 		});
 	}else{
 		var is_notice = action == 'opennotice' ? 1 : 0;
@@ -572,6 +644,56 @@ function batch_edit_remark(ids) {
 				type : 'POST',
 				url : '/domain/op/act/batchedit',
 				data : {ids:ids, remark:remark},
+				dataType : 'json',
+				success : function(data) {
+					layer.close(ii);
+					layer.alert(data.msg,{
+						icon: 1,
+						closeBtn: false
+					}, function(){
+						layer.closeAll();
+						searchRefresh();
+					});
+				},
+				error:function(data){
+					layer.close(ii);
+					layer.msg('服务器错误');
+				}
+			});
+		}
+	});
+}
+
+function batch_set_category(ids) {
+	var categoryOptions = '<option value="0">未分类</option>';
+	$.ajax({
+		type : 'GET',
+		url : '/domain/category/list',
+		dataType : 'json',
+		async: false,
+		success : function(data) {
+			if(data.code == 0 && data.data){
+				$.each(data.data, function(index, item){
+					categoryOptions += '<option value="' + item.id + '">' + item.name + '</option>';
+				});
+			}
+		}
+	});
+	
+	layer.open({
+		type: 1,
+		area: ['350px'],
+		closeBtn: 2,
+		title: '批量设置分类',
+		content: '<div style="padding:15px"><div class="form-group"><select class="form-control" name="category_id">' + categoryOptions + '</select></div></div>',
+		btn: ['确认', '取消'],
+		yes: function(){
+			var cid = $("select[name='category_id']").val();
+			var ii = layer.load(2, {shade:[0.1,'#fff']});
+			$.ajax({
+				type : 'POST',
+				url : '/domain/setcategory',
+				data : {ids:ids, cid:cid},
 				dataType : 'json',
 				success : function(data) {
 					layer.close(ii);

@@ -2,6 +2,7 @@
 
 namespace app\lib\deploy;
 
+use app\lib\CertHelper;
 use app\lib\DeployInterface;
 use Exception;
 
@@ -49,7 +50,8 @@ class ssh implements DeployInterface
             fclose($stream);
             $this->log('私钥已保存到：' . $config['pem_key_file']);
         } elseif ($config['format'] == 'pfx') {
-            $pfx = \app\lib\CertHelper::getPfx($fullchain, $privatekey, $config['pfx_pass'] ? $config['pfx_pass'] : null);
+            $pfx_pass = $config['pfx_pass'] ?? null;
+            $pfx = CertHelper::getPfx($fullchain, $privatekey, $pfx_pass);
 
             $stream = fopen("ssh2.sftp://$sftp{$config['pfx_file']}", 'w');
             if (!$stream) {
@@ -157,8 +159,20 @@ class ssh implements DeployInterface
             file_put_contents($privateKeyPath, $this->config['privatekey']);
             file_put_contents($publicKeyPath, $publicKey);
             umask($umask);
-            if (!ssh2_auth_pubkey_file($connection, $this->config['username'], $publicKeyPath, $privateKeyPath)) {
-                throw new Exception('私钥认证失败');
+            
+            try {
+                if (!empty($this->config['passphrase'])) {
+                    if (!ssh2_auth_pubkey_file($connection, $this->config['username'], $publicKeyPath, $privateKeyPath, $this->config['passphrase'])) {
+                        throw new Exception('私钥认证失败');
+                    }
+                } else {
+                    if (!ssh2_auth_pubkey_file($connection, $this->config['username'], $publicKeyPath, $privateKeyPath)) {
+                        throw new Exception('私钥认证失败');
+                    }
+                }
+            } finally {
+                unlink($publicKeyPath);
+                unlink($privateKeyPath);
             }
         } else {
             if (!ssh2_auth_password($connection, $this->config['username'], $this->config['password'])) {

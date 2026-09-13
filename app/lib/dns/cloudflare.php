@@ -8,6 +8,7 @@ class cloudflare implements DnsInterface
 {
     private $Email;
     private $ApiKey;
+    private $auth;
     private $baseUrl = 'https://api.cloudflare.com/client/v4';
     private $error;
     private $domain;
@@ -16,11 +17,33 @@ class cloudflare implements DnsInterface
 
     function __construct($config)
     {
-        $this->Email = $config['ak'];
-        $this->ApiKey = $config['sk'];
+        $this->Email = $config['email'];
+        $this->ApiKey = $config['apikey'];
         $this->domain = $config['domain'];
         $this->domainid = $config['domainid'];
         $this->proxy = isset($config['proxy']) ? $config['proxy'] == 1 : false;
+        $this->auth = isset($config['auth']) ? intval($config['auth']) : (preg_match('/^[0-9a-f]+$/i', $this->ApiKey) ? 0 : 1);
+    }
+
+    /**
+     * 从 Cloudflare API 返回的完整域名中提取子域名（主机记录）
+     * 兼容 Emoji/IDN 域名：Cloudflare API 返回 Punycode 格式，数据库存储 UTF-8
+     */
+    private function extractName($fullName)
+    {
+        $domainAscii = idn_to_ascii($this->domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
+        if ($domainAscii === false) $domainAscii = $this->domain;
+
+        if ($fullName === $domainAscii || $fullName === $this->domain) {
+            return '@';
+        }
+        if (str_ends_with($fullName, '.' . $domainAscii)) {
+            return substr($fullName, 0, -(strlen($domainAscii) + 1));
+        }
+        if (str_ends_with($fullName, '.' . $this->domain)) {
+            return substr($fullName, 0, -(strlen($this->domain) + 1));
+        }
+        return $fullName;
     }
 
     public function getError()
@@ -59,25 +82,35 @@ class cloudflare implements DnsInterface
     }
 
     //获取解析记录列表
-    public function getDomainRecords($PageNumber = 1, $PageSize = 20, $KeyWord = null, $SubDomain = null, $Value = null, $Type = null, $Line = null, $Status = null)
+    public function getDomainRecords($PageNumber = 1, $PageSize = 20, $KeyWord = null, $SubDomain = null, $Value = null, $Type = null, $Line = null, $Status = null, $SortField = null, $SortOrder = 'asc')
     {
         if (!isNullOrEmpty($Value)) $KeyWord = $Value;
         $param = ['type' => $Type, 'search' => $KeyWord, 'page' => $PageNumber, 'per_page' => $PageSize];
         if (!isNullOrEmpty($SubDomain)) {
-            if ($SubDomain == '@') $SubDomain = $this->domain;
-            else $SubDomain .= '.' . $this->domain;
+            $domainAscii = idn_to_ascii($this->domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46) ?: $this->domain;
+            if ($SubDomain == '@') $SubDomain = $domainAscii;
+            else $SubDomain .= '.' . $domainAscii;
             $param['name'] = $SubDomain;
         }
         if (!isNullOrEmpty($Line)) {
             $param['proxied'] = $Line == '1' ? 'true' : 'false';
         }
+        $allowedSort = ['Name' => 'name', 'Type' => 'type', 'LineName' => 'proxied', 'Value' => 'content'];
+        if ($SortField && isset($allowedSort[$SortField])) {
+            $param['order'] = $allowedSort[$SortField];
+            $param['direction'] = strtolower($SortOrder) === 'desc' ? 'desc' : 'asc';
+        }
         $data = $this->send_reuqest('GET', '/zones/'.$this->domainid.'/dns_records', $param);
         if ($data) {
             $list = [];
             foreach ($data['result'] as $row) {
-                $name = $this->domain == $row['name'] ? '@' : str_replace('.'.$this->domain, '', $row['name']);
+                $name = $this->extractName($row['name']);
                 $status = str_ends_with($name, '_pause') ? '0' : '1';
+                $name = $name == '__root__' ? '@' : $name;
                 $name = $status == '0' ? substr($name, 0, -6) : $name;
+                if ($row['type'] == 'SRV' && isset($row['priority'])) {
+                    $row['content'] = $row['priority'] . ' ' . $row['content'];
+                }
                 $list[] = [
                     'RecordId' => $row['id'],
                     'Domain' => $this->domain,
@@ -109,9 +142,13 @@ class cloudflare implements DnsInterface
     {
         $data = $this->send_reuqest('GET', '/zones/'.$this->domainid.'/dns_records/'.$RecordId);
         if ($data) {
-            $name = $this->domain == $data['result']['name'] ? '@' : str_replace('.' . $this->domain, '', $data['result']['name']);
+            $name = $this->extractName($data['result']['name']);
             $status = str_ends_with($name, '_pause') ? '0' : '1';
             $name = $status == '0' ? substr($name, 0, -6) : $name;
+            $name = $name == '__root__' ? '@' : $name;
+            if ($data['result']['type'] == 'SRV' && isset($data['result']['priority'])) {
+                $data['result']['content'] = $data['result']['priority'] . ' ' . $data['result']['content'];
+            }
             return [
                 'RecordId' => $data['result']['id'],
                 'Domain' => $this->domain,
@@ -174,6 +211,12 @@ class cloudflare implements DnsInterface
     {
         $info = $this->getDomainRecordInfo($RecordId);
         $Name = $Status == '1' ? str_replace('_pause', '', $info['Name']) : $info['Name'] . '_pause';
+        // @ 作为特殊字符不能设置为解析, 故设置暂停解析的时候, 替换为 __root__
+        if ($Name == '__root__') {
+            $Name = '@';
+        } elseif ($Name == '@_pause') {
+            $Name = '__root___pause';
+        }
         return $this->updateDomainRecord($RecordId, $Name, $info['Type'], $info['Value'], $info['Line'], $info['TTL'], $info['MX'], $info['Weight'], $info['Remark']);
     }
 
@@ -257,14 +300,14 @@ class cloudflare implements DnsInterface
     {
         $url = $this->baseUrl . $path;
 
-        if (preg_match('/^[0-9a-z]+$/i', $this->ApiKey)) {
+        if ($this->auth == 0) {
             $headers = [
-                'X-Auth-Email: ' . $this->Email,
-                'X-Auth-Key: ' . $this->ApiKey,
+                'X-Auth-Email' => $this->Email,
+                'X-Auth-Key' => $this->ApiKey,
             ];
         } else {
             $headers = [
-                'Authorization: Bearer ' . $this->ApiKey,
+                'Authorization' => 'Bearer ' . $this->ApiKey,
             ];
         }
 
@@ -275,39 +318,17 @@ class cloudflare implements DnsInterface
             }
         } else {
             $body = json_encode($params);
-            $headers[] = 'Content-Type: application/json';
+            $headers['Content-Type'] = 'application/json';
         }
 
-        $ch = curl_init($url);
-        if ($this->proxy) {
-            curl_set_proxy($ch);
+        try {
+            $response = http_request($url, $body, null, null, $headers, $this->proxy, $method);
+        } catch (\Exception $e) {
+            $this->setError($e->getMessage());
+            return false;
         }
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        if ($method == 'POST') {
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        } elseif ($method == 'PUT') {
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        } elseif ($method == 'PATCH') {
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        } elseif ($method == 'DELETE') {
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
-        }
-        $response = curl_exec($ch);
-        $errno = curl_errno($ch);
-        if ($errno) {
-            $this->setError('Curl error: ' . curl_error($ch));
-        }
-        curl_close($ch);
-        if ($errno) return false;
 
-        $arr = json_decode($response, true);
+        $arr = json_decode($response['body'], true);
         if ($arr) {
             if ($arr['success']) {
                 return $arr;

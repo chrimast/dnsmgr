@@ -54,8 +54,6 @@ class Index extends BaseController
 
         if (config('app.dbversion') && config_get('version') != config('app.dbversion')) {
             $this->db_update();
-            config_set('version', config('app.dbversion'));
-            Cache::clear();
         }
 
         $tmp = 'version()';
@@ -64,7 +62,7 @@ class Index extends BaseController
             'framework_version' => app()->version(),
             'php_version' => PHP_VERSION,
             'mysql_version' => $mysqlVersion,
-            'software' => $_SERVER['SERVER_SOFTWARE'],
+            'software' => $_SERVER['SERVER_SOFTWARE'] ?? '未知',
             'os' => php_uname(),
             'date' => date("Y-m-d H:i:s"),
         ];
@@ -85,6 +83,27 @@ class Index extends BaseController
             try {
                 Db::execute($value);
             } catch (Exception $e) {
+            }
+        }
+        config_set('version', config('app.dbversion'));
+        Cache::clear();
+        if(Db::name('account')->count() > 0 && Db::name('account')->whereNotNull('config')->count() == 0) {
+            $accounts = Db::name('account')->select();
+            foreach ($accounts as $account) {
+                if (!empty($account['config']) || !isset(\app\lib\DnsHelper::$dns_config[$account['type']])) continue;
+                $config = [];
+                $account_fields = ['name', 'sk', 'ext'];
+                $i = 0;
+                foreach(\app\lib\DnsHelper::$dns_config[$account['type']]['config'] as $field => $item) {
+                    if ($field == 'proxy') {
+                        $config[$field] = $account['proxy'];
+                        break;
+                    }
+                    if ($i >= 3) break;
+                    $account_field = $account_fields[$i++];
+                    $config[$field] = isset($account[$account_field]) ? $account[$account_field] : '';
+                }
+                Db::name('account')->where('id', $account['id'])->update(['config' => json_encode($config)]);
             }
         }
     }

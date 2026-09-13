@@ -3,6 +3,7 @@
 namespace app\lib\deploy;
 
 use app\lib\DeployInterface;
+use app\lib\CertHelper;
 use Exception;
 
 class btpanel implements DeployInterface
@@ -26,7 +27,7 @@ class btpanel implements DeployInterface
         $path = '/config?action=get_config';
         $response = $this->request($path, []);
         $result = json_decode($response, true);
-        if (isset($result['status']) && ($result['status']==1 || isset($result['sites_path']))) {
+        if (isset($result['status']) && ($result['status'] == 1 || isset($result['sites_path']))) {
             return true;
         } else {
             throw new Exception(isset($result['msg']) ? $result['msg'] : '面板地址无法连接');
@@ -40,13 +41,23 @@ class btpanel implements DeployInterface
             $this->log("面板证书部署成功");
             return;
         }
+
         $sites = explode("\n", $config['sites']);
         $success = 0;
         $errmsg = null;
         foreach ($sites as $site) {
             $siteName = trim($site);
             if (empty($siteName)) continue;
-            if ($config['type'] == '3') {
+            if ($config['type'] == '4') {
+                try {
+                    $this->deployProxy($siteName, $fullchain, $privatekey);
+                    $this->log("反向代理站点 {$siteName} 证书部署成功");
+                    $success++;
+                } catch (Exception $e) {
+                    $errmsg = $e->getMessage();
+                    $this->log("反向代理站点 {$siteName} 证书部署失败：" . $errmsg);
+                }
+            } elseif ($config['type'] == '3') {
                 try {
                     $this->deployDocker($siteName, $fullchain, $privatekey);
                     $this->log("Docker域名 {$siteName} 证书部署成功");
@@ -157,6 +168,25 @@ class btpanel implements DeployInterface
         }
     }
 
+    private function deployProxy($domain, $fullchain, $privatekey)
+    {
+        $path = '/mod/proxy/com/set_ssl';
+        $data = [
+            'site_name' => $domain,
+            'key' => $privatekey,
+            'csr' => $fullchain,
+        ];
+        $response = $this->request($path, $data);
+        $result = json_decode($response, true);
+        if (isset($result['status']) && $result['status']) {
+            return true;
+        } elseif (isset($result['msg'])) {
+            throw new Exception($result['msg']);
+        } else {
+            throw new Exception($response ? $response : '返回数据解析失败');
+        }
+    }
+
     public function setLogger($func)
     {
         $this->logger = $func;
@@ -169,17 +199,27 @@ class btpanel implements DeployInterface
         }
     }
 
-    private function request($path, $params)
+    private function request($path, $params, $file = false)
     {
         $url = $this->url . $path;
 
-        $now_time = time();
-        $post_data = [
-            'request_token' => md5($now_time . md5($this->key)),
-            'request_time' => $now_time
-        ];
-        $post_data = array_merge($post_data, $params);
-        $response = http_request($url, $post_data, null, null, null, $this->proxy);
+        $now_time = (string) time();
+        $headers = [];
+        if ($file) {
+            $post_data = [
+                ['name' => 'request_token', 'contents' => md5($now_time . md5($this->key))],
+                ['name' => 'request_time', 'contents' => $now_time],
+            ];
+            $post_data = array_merge($post_data, $params);
+            $headers['Content-Type'] = 'multipart/form-data';
+        } else {
+            $post_data = [
+                'request_token' => md5($now_time . md5($this->key)),
+                'request_time' => $now_time
+            ];
+            $post_data = array_merge($post_data, $params);
+        }
+        $response = http_request($url, $post_data, null, null, $headers, $this->proxy);
         return $response['body'];
     }
 }
